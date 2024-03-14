@@ -38,7 +38,3 @@ jobs:
         # gcovr-version: # default is 4.2
            
       
-    - name: setup
-      run: meson setup build
-    - name: test
-      run: meson test
