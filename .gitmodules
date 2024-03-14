@@ -1,0 +1,3 @@
+[submodule "subprojects/hashmap"]
+	path = subprojects/hashmap
+	url = https://github.com/UnusualEgg/hashmap-c
