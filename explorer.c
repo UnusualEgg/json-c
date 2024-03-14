@@ -293,7 +293,9 @@ int main(int argc, char **argv) {
     noecho();
     err_menu(set_menu_win(m,wm),"set_menu_win");
     err_menu(set_menu_sub(m,derwin(wm,lines-1,cols-2,1,1)),"set_menu_sub");
-    set_menu_format(m,LINES,COLS);
+    //TODO figure out why only liek 15 items show up at a time
+    //then it srolls
+    set_menu_format(m,lines-2,COLS);
     
     mvprintw(0,0,"Json Explorer");
     box(wm,0,0);
