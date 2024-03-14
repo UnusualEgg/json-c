@@ -19,10 +19,11 @@ jobs:
     
     
     steps:
+    - uses: actions/checkout@v3
     - uses: BSFishy/meson-build@v1.0.3
       with:
         # The action to run
-        action: compile
+        action: build
         # The directory to build the project to
         # directory: # default is build
         # Additional options to pass to Meson during setup
@@ -37,7 +38,6 @@ jobs:
         # gcovr-version: # default is 4.2
            
       
-    - uses: actions/checkout@v3
     - name: setup
       run: meson setup build
     - name: compile
