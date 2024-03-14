@@ -12,6 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+//TODO what if invalid
+//(make sure UNKNOWN works with invalid json file)
 
 #define PROJECT_NAME "json"
 #define exit_null(v, n)                                                        \
@@ -429,21 +431,26 @@ struct jobject parse_any(FILE *f) {
     j.type = UNKNOWN;
     return j;
 }
-struct jobject load_file(FILE *f) {
+//sets errno
+struct jobject* load_file(FILE *f) {
     // load whatever kinda object this is
-    return parse_any(f);
+    struct jobject* buf = malloc(sizeof(struct jobject));
+    if (!buf) {return NULL;}
+    struct jobject j = parse_any(f);
+    return memcpy(buf,&j,sizeof(struct jobject));
 }
-struct jobject load_fn(char *fn) {
+//set errno
+struct jobject* load_fn(char *fn) {
     FILE *f = fopen(fn, "r");
-    exit_null(f, "fopen");
+    if (!f) {return NULL;}
 
-    struct jobject result = load_file(f);
+    struct jobject* result = load_file(f);
 
-    exit_v(fclose(f), EOF, "fclose");
+    if (fclose(f)==EOF) {return NULL;}
     return result;
 }
 
-// frees j's value(s) recursively
+// frees j and its value(s) recursively
 void free_object(struct jobject *j) {
     switch (j->type) {
         case JOBJECT:;
@@ -476,6 +483,7 @@ void free_object(struct jobject *j) {
                      // not malloc'd
                      break;
     }
+    free(j);
 }
 void print_object(struct jobject* j) {
     fprint_object(stdout,j);

@@ -70,8 +70,9 @@ struct jobject parse_object(FILE *f);
 enum type find_type(FILE *f);
 
 //load file
-struct jobject load_file(FILE *f);
-struct jobject load_fn(char *fn);
+struct jobject* load_file(FILE *f);
+//set errno
+struct jobject* load_fn(char *fn);
 //unload
 void free_object(struct jobject* j);
 
