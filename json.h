@@ -60,12 +60,12 @@ void copy_to(struct jobject* dest, struct jobject* src);
 
 //parsing
 //this will call one of the other functions
-struct jobject parse_any(FILE *f);
-struct jobject parse_bool(FILE *f);
-struct jobject parse_number(FILE *f);
-struct jobject parse_string(FILE *f);
-struct jobject parse_array(FILE *f);
-struct jobject parse_object(FILE *f);
+struct jobject* parse_any(FILE *f);
+struct jobject* parse_bool(FILE *f);
+struct jobject* parse_number(FILE *f);
+struct jobject* parse_string(FILE *f);
+struct jobject* parse_array(FILE *f);
+struct jobject* parse_object(FILE *f);
 
 enum type find_type(FILE *f);
 
@@ -78,8 +78,9 @@ void free_object(struct jobject* j);
 
 //output object
 void print_object(struct jobject* j);
-void fprint_object(FILE* f,struct jobject *j);
-void serialize(char* fn, struct jobject *j);
+//true if error
+bool fprint_object(FILE* f,struct jobject *j);
+bool serialize(char* fn, struct jobject *j);
 //see json.c comments for details
 char* sprint_object(struct jobject *j,char* buf,size_t* offset,size_t* buf_len);
 
