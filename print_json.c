@@ -10,10 +10,11 @@ int main(int argc, char **argv) {
         return 1;
     }
     printf("This is project %s.\n", PROJECT_NAME);
-    struct jobject j = load_fn(argv[1]);
-    print_object(&j);
+    struct jobject* j = load_fn(argv[1]);
+    if (!j) {perror("load_fn");exit(EXIT_FAILURE);}
+    print_object(j);
     printf("\n");
-    free_object(&j);
+    free_object(j);
 
     return 0;
 }
