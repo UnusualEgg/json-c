@@ -264,12 +264,13 @@ int main(int argc, char **argv) {
     refresh();
 
     //parsing and such
-    struct jobject j = load_fn(argv[1]);
+    struct jobject* j = load_fn(argv[1]);
+    if (!j) {endwin();perror("load_fn");exit(EXIT_FAILURE);}
     size_t levels_len=10;
     //list of pointers
     struct jobject** levels=calloc(levels_len,sizeof(struct jobject*));
     int level=0;
-    struct jobject* curr = &j;
+    struct jobject* curr = j;
     //only when going down
     //struct jobject* curr = append_level(&levels, &levels_len, &level, &j);
    
@@ -384,7 +385,7 @@ int main(int argc, char **argv) {
     free_items(items,items_len,strings,strings_len,&item_i);
 
     free(levels);
-    free_object(&j);
+    free_object(j);
 
     free(items);
     free(strings);
