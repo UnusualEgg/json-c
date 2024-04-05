@@ -1,6 +1,6 @@
 //debug print
 #ifndef dbp
-#define dbp 0
+#define dbp 1
 #endif
 
 #include "json.h"
@@ -407,7 +407,15 @@ array_err:
     err->pos=*index;
     return NULL;
 }
-
+#if dbp
+void pair_printer(struct hashmap_node* node) {
+    struct key_pair* pair = node->val;
+    printf("{\"%s\":",pair->key);
+    printf("(%s)",type_to_str(pair->val->type));
+    //print_object(pair->val);
+    printf("}");
+}
+#endif
 struct jobject* parse_object(char* str, size_t str_len, size_t* index, struct jerr* err) {
     // init object
     struct jobject* j=malloc(sizeof(struct jobject));
@@ -467,7 +475,7 @@ struct jobject* parse_object(char* str, size_t str_len, size_t* index, struct je
 #endif
         hm_setx(hm, hm_new(hm, key), &pair, sizeof(pair));
 #if dbp
-        hm_debug(hm);
+        hm_debugx(hm,pair_printer);
         printf("parsed value\n");
 #endif
 
