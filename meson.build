@@ -1,6 +1,6 @@
 project('json', 'c',
   version : '0.1',
-  default_options : ['warning_level=3','b_sanitize=address','prefer_static=true'])#,'c_args=[-ggdb]'])
+  default_options : ['warning_level=3','b_sanitize=address,undefined','prefer_static=true','c_args=[-g -O0]'])
 #libs
 hm_proj=subproject('hashmap',required:true)
 hm_lib=hm_proj.get_variable('hm_lib')
@@ -35,4 +35,6 @@ ncurses=dependency('ncurses')
 menu=dependency('menu')
 executable('explore', 'explorer.c',
   install : false,dependencies:[hm_lib,json_lib,ncurses,menu])
+executable('jprint', 'print_json.c',
+  install : false,dependencies:[hm_lib,json_lib])
 

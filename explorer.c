@@ -133,10 +133,17 @@ void add_items(struct jobject* curr, ITEM*** items_array, size_t* items_len, cha
             //print keys
             struct hashmap_node* node = curr->val.dict->nodes;
             while (node) {
-                src=((struct key_pair*)node->val)->key;
+                struct key_pair* pair = (struct key_pair*)node->val;
+                src=pair->key;
                 if(*src=='\0') {src=" ";} 
-                buf=strdup(src);
-                exit_null(buf,"strdup");
+                size_t len=strlen(src);
+                buf=malloc(len+1+8+1+1);//(type)\0
+                exit_null(buf,"malloc");
+                memcpy(buf,src,len+1);
+                buf[len]='(';
+                buf[len+1]='\0';
+                strncat(buf,type_to_str(pair->val->type),8);
+                strcat(buf,")");
                 append_str(strings_array,strings_len,*item_i,buf);
                 strings=*strings_array;
 
@@ -162,22 +169,27 @@ void add_items(struct jobject* curr, ITEM*** items_array, size_t* items_len, cha
             for (unsigned int i=0;i<arr.len;i++) {
                 buf=malloc(COLS);
                 exit_null(buf,"malloc");
-                switch (arr.arr[i].type) {
+                switch (arr.arr[i]->type) {
                     case JOBJECT:
                         snprintf(buf,COLS,"%u: object",i);
                         break;
                     case JARRAY:
-                        snprintf(buf,COLS,"%u: array[%zu]",i,arr.arr[i].val.array.len);
+                        snprintf(buf,COLS,"%u: array[%zu]",i,arr.arr[i]->val.array.len);
                         break;
-                    case JSTR:
-                        snprintf(buf,COLS,"%u: string[%zu]",i,strlen(arr.arr[i].val.str));
+                    case JSTR:;
+                        size_t len = strlen(arr.arr[i]->val.str);
+                        if (len<(size_t)COLS-4) {
+                            snprintf(buf,COLS,"%u: \"%s\"",i,arr.arr[i]->val.str);
+                        } else {
+                            snprintf(buf,COLS,"%u: string[%zu]",i,len);
+                        }
                         break;
                     case JNUMBER:case JBOOL:case JNULL:case UNKNOWN:;
                         size_t offset=0;
                         size_t buf_len=COLS;
                         char* buf_str=malloc(buf_len);
                         exit_null(buf_str,"malloc");
-                        buf_str = exit_null(sprint_object(&arr.arr[i],buf_str,&offset,&buf_len),"sprint_object");
+                        buf_str = exit_null(sprint_object(arr.arr[i],buf_str,&offset,&buf_len),"sprint_object");
                         snprintf(buf,COLS-1,"%u: %s",i,buf_str);
                         free(buf_str);
                         break;
@@ -264,7 +276,22 @@ int main(int argc, char **argv) {
     refresh();
 
     //parsing and such
-    struct jobject* j = load_fn(argv[1]);
+    char* buf=NULL;
+    size_t len=0;
+    struct jerr err={0}; 
+    struct jobject* j = load_fn(argv[1],&buf,&len,&err);
+    if (!j) {
+        endwin();
+        if (err.errno_set) {
+            print_jerr(&err);
+            perror("load_fn");
+        } else {
+            print_jerr(&err);
+        }
+        free(buf);
+        exit(EXIT_FAILURE);
+    }
+    free(buf);
     if (!j) {endwin();perror("load_fn");exit(EXIT_FAILURE);}
     size_t levels_len=10;
     //list of pointers
@@ -356,7 +383,7 @@ int main(int argc, char **argv) {
                     if (curr->type==JARRAY) {
                         //free(buf);//this is the type
                         append_level(&levels, &levels_len, &level, curr);
-                        curr = &curr->val.array.arr[index];
+                        curr = curr->val.array.arr[index];
                     } else if (curr->type==JOBJECT) {
                         struct hashmap_node* node=curr->val.dict->nodes;
                         for (int i=0;i<index;i++){
@@ -364,7 +391,7 @@ int main(int argc, char **argv) {
                         }
                         exit_null(node,"get object from menu");
                         append_level(&levels, &levels_len, &level, curr);
-                        curr=&((struct key_pair*)(node->val))->val;
+                        curr=((struct key_pair*)(node->val))->val;
                     } else {break;}
                 }
                 if (level<0||(size_t)level>=levels_len) {endwin();fprintf(stderr,"level:%d, levels_len:%zu\n",level,levels_len);exit(EXIT_FAILURE);}

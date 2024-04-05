@@ -10,8 +10,20 @@ int main(int argc, char **argv) {
         return 1;
     }
     printf("This is project %s.\n", PROJECT_NAME);
-    struct jobject* j = load_fn(argv[1]);
-    if (!j) {perror("load_fn");exit(EXIT_FAILURE);}
+    char* buf=NULL;
+    size_t len=0;
+    struct jerr err={0}; 
+    struct jobject* j = load_fn(argv[1],&buf,&len,&err);
+    if (!j) {
+        if (err.errno_set) {
+            print_jerr(&err);
+            perror("load_fn");
+        } else {
+            print_jerr(&err);
+        }
+        free(buf);
+        exit(EXIT_FAILURE);
+    }
     print_object(j);
     printf("\n");
     free_object(j);

@@ -12,26 +12,49 @@
 #include <stdlib.h>
 #include <string.h>
 
-//TODO get rid of exit_null and such
 
 #define PROJECT_NAME "json"
 //eh it works
 #define exit_null(j,v, n)                                                        \
     if (!v) {                                                                    \
-        free(j);                                                                 \
+        free_object(j);                                                                 \
         return NULL;                                                             \
     }
 #define exit_v(j,v, e, n)                                                        \
     if (v == e) {                                                                \
-        free(j);                                                                 \
+        free_object(j);                                                                 \
         return NULL;                                                        \
     }
+#define exit_malloc(type_t) \
+    if (!j) { \
+        err->iserr=true;\
+        err->type=type_t;\
+        err->pos=*index;\
+        err->errno_set=true;\
+        return NULL;\
+    }
 bool unget(char c, FILE *f) { return ungetc((char)c, f)==EOF; }
-bool ws(FILE* f,char* c,const char* msg) {
-    do {                                         
-        *c = fgetc(f);
-        if (*c==EOF) {return true;}
+//c to change
+//index is 1 ahead of c
+//index may be at EOF
+//req:
+//index should point at first char of data(or space)
+//what it do:
+//if not space then don't move
+//set c to first non space
+//set index to c
+//steps:
+//- c=[*index]
+//- while (isspace(c)):c=[*index++] 
+//- if (c!=[*index]): *index--
+bool ws(char* str, size_t str_len, size_t* index,char* c,struct jerr* err) {
+    do {
+        if (*index>=str_len) {return true;}                                        
+        *c = str[(*index)++];
+        if (*c=='\n') {err->line++;err->last_nl=*index-1;}
     } while (isspace(*c));
+    (*index)--;
+    //now c==[*index]
     return false;
 }
 
@@ -40,6 +63,19 @@ void copy_to(struct jobject *dest, struct jobject *src) {
     dest->val = src->val;
 }
 
+
+void print_jerr(struct jerr* err) {
+    if (!err->iserr) {return;}
+    fprintf(stderr,"Error parsing %s | Position:%zu(line:%zu) | Expected: ",type_to_str(err->type),err->pos-err->last_nl,err->line+1);
+    //print each expectd
+    for (int i=0;i<3;i++) {
+        char c=err->expected[i];
+        if (c=='\0') {break;}
+        fprintf(stderr, "'%c' ", c);
+    }
+    if (err->got) {printf("but got '%c'",err->got);}
+    printf("\n");
+}
 
 const char* type_to_str(enum type type) {
     switch (type) {
@@ -55,98 +91,117 @@ const char* type_to_str(enum type type) {
 }
 
 // parse
-struct jobject* parse_null(FILE *f) {
+struct jobject* parse_null(char* str, size_t str_len, size_t* index, struct jerr* err) {
+    if (*index+3>=str_len||str[(*index)]!='n') {
+        err->iserr=true;
+        err->type=JNULL;
+        err->pos=*index;
+        err->expected[0]='n';
+        return NULL;
+    }
     // init object
     struct jobject* j=malloc(sizeof(struct jobject));
+    exit_malloc(JNULL);
     j->type = JNULL;
     j->val.null = '\0';
     // no need to test if it's null
     // it can only be null
-    fseek(f, 4, SEEK_CUR);
+    (*index)+=4;
     return j;
 }
-struct jobject* parse_bool(FILE *f) {
+struct jobject* parse_bool(char* str, size_t str_len, size_t* index, struct jerr* err) {
     // init object
     struct jobject* j=malloc(sizeof(struct jobject));
+    exit_malloc(JBOOL);
     j->type = JBOOL;
     // now parse
-    int c = fgetc(f);
-    if (c==EOF) {free(j);return NULL;}
+    if (*index>=str_len) {goto bool_err;}
+    char c=str[(*index)++];
     if (c == 't') {
         j->val.boolean = true;
-        fseek(f, 3, SEEK_CUR);
+        *index+=3;
         return j;
     } else if (c == 'f') {
         j->val.boolean = false;
-        fseek(f, 4, SEEK_CUR);
+        *index+=4;
         return j;
-    } else {
-        char buf[5] = {0};
-        //if (!fgets(buf, 5, f)) {free(j);return NULL;}
-        //fprintf(stderr, "[bool] tf is %c%4s...?\n", c, buf);
-        free(j);
-        return NULL;
     }
+bool_err:
+    err->iserr=true;
+    err->type=JBOOL;
+    err->expected[0]='t';
+    err->expected[1]='f';
+    err->pos=*index;
+    free_object(j);
+    return NULL;
+    
 }
-struct jobject* parse_number(FILE *f) {
+struct jobject* parse_number(char* str, size_t str_len, size_t* index, struct jerr* err) {
     // init object
     struct jobject* j=malloc(sizeof(struct jobject));
+    exit_malloc(JNUMBER);
     j->type = JNUMBER;
     j->val.number.islong = true;
     // now parse got num
 
-    int c = fgetc(f);
-    exit_v(j,c, EOF, "fgetc");
+    if (*index>=str_len) {goto number_err;}
+    char c=str[(*index)++];
     char buf[1024] = {0};
     buf[0] = c;
     int i = 0;
     while (isdigit(c) || c == '.' || c == '-') {
+        if (*index>=str_len) {goto number_err;}
         buf[i] = c;
-        c = fgetc(f);
-        exit_v(j,c, EOF, "fgetc");
+        c=str[(*index)++];
         if (c == '.') {
             j->val.number.islong = false;
         }
         i++;
     }
+    if (i==0) {goto number_err;}//expected digit,'.', or '-'
     if (j->val.number.islong) {
         long long l;
         errno = 0;
         l = strtoll(buf, NULL, 10); // assume base 10
         if (errno == EINVAL) {
-            free(j);
-            return NULL;
+            err->errno_set=true;
+            goto number_err;
         }
         j->val.number.num.l = l;
     } else {
         double d;
-        errno = 0;
         char * ptr=buf;
         d = strtod(buf, &ptr);
         if (ptr==buf) {
-            free(j);
-            return NULL;
+            goto number_err;
         }
+        //note: errno may be set to ERANGE but it's finnne
         j->val.number.num.d = d;
     }
-
-    if (unget(c, f)) {free(j);return NULL;}
+    (*index)--;
 
     return j;
+
+number_err:
+    err->iserr=true;
+    err->type=JNUMBER;
+    err->pos=*index;
+    free_object(j);
+    return NULL;
 }
-struct jobject* parse_string(FILE *f) {
+//TODO finish converting to string
+struct jobject* parse_string(char* str, size_t str_len, size_t* index, struct jerr* err) {
     // init object
     struct jobject* j=malloc(sizeof(struct jobject));
+    exit_malloc(JSTR);
     j->type = JSTR;
+    j->val.str=NULL;
     // now parse got "
-    int c = fgetc(f);
-    exit_v(j,c, EOF, "fgetc");
+    if (*index>=str_len||str[*index]!='\"') {goto expected_quote;}
+    char c=str[(*index)++];
 #if dbp
     printf("begin of parse_string: %c\n", c);
-    fflush(stdout);
 #endif
-    assert(c == '\"');
-    // cool now we've verified begining
 
     bool escaped = false;
     size_t len = 0;
@@ -155,28 +210,31 @@ struct jobject* parse_string(FILE *f) {
     printf("getlen:\"");
 #endif
     // get initial letter/whatever
-    c = fgetc(f);
-    exit_v(j,c, EOF, "parse_string");
+    if (*index>=str_len) {goto expected_quote;}
+    c=str[(*index)++];
     while (c != '\"') {
 #if dbp
         printf("%c", c);
 #endif
         if (!escaped && c == '\\') {
             escaped = true;
+            if (*index>=str_len) {goto string_err;}
+            c=str[(*index)++];
             continue;
         }
         escaped = false;
         len++;
-        c = fgetc(f);
-        exit_v(j,c, EOF, "parse_string");
+        if (*index>=str_len) {goto expected_quote;}
+        c=str[(*index)++];
     }
 #if dbp
     printf("\": %zu\n", len);
 #endif
-
+    //now we got the literal characters in 
     // actually parse stirng
-    fseek(f, -len - 1, SEEK_CUR);
+    *index-=(len+1);//+1 bc " I think
     char *buf = malloc(len + 1); //+1 for '\0'
+    if (!buf) {err->errno_set=true;goto string_err;}
     exit_null(j,buf, "malloc");
     j->val.str = buf;
 
@@ -184,14 +242,17 @@ struct jobject* parse_string(FILE *f) {
 #if dbp
     printf("write:\"");
 #endif
-    c = fgetc(f);
-    exit_v(j,c, EOF, "parse_string");
+    c=str[(*index)++];
 #if dbp
-    printf("{%c}", c);
+    if (c!='"') {
+        printf("%c", c);
+    }
 #endif
     while (c != '"') {
         if (!escaped && c == '\\') {
             escaped = true;
+            //NOTE: this should be fine
+            c=str[(*index)++];
             continue;
         }
 
@@ -229,8 +290,8 @@ struct jobject* parse_string(FILE *f) {
         // end
         assert(i < len);
         i++;
-        c = fgetc(f);
-        exit_v(j,c, EOF, "parse_string");
+        if (*index>=str_len) {goto expected_quote;}
+        c=str[(*index)++];
 #if dbp
         printf("%c", c);
 #endif
@@ -238,155 +299,200 @@ struct jobject* parse_string(FILE *f) {
 #if dbp
     printf("\n");
 #endif
-    assert(c == '"');
     buf[len] = '\0';
 
 #if dbp
     printf("after parse_string: %c. str:%s\n", c, buf);
 #endif
     return j;
+expected_quote:
+    err->expected[0]='\"';
+string_err:
+    //only free inner string if we have it
+    if (j->val.str) {
+        free_object(j);
+    } else {
+        free(j);
+    }
+    err->iserr=true;
+    err->type=JSTR;
+    err->pos=*index;
+    return NULL;
 }
-struct jobject* parse_array(FILE *f) {
+
+struct jobject* parse_array(char* str, size_t str_len, size_t* index, struct jerr* err) {
     // init object
     struct jobject* j=malloc(sizeof(struct jobject));
+    exit_malloc(JARRAY);
     j->type = JARRAY;
     j->val.array.arr = NULL;
     j->val.array.len = 0;
     size_t *len = &(j->val.array.len);
     // struct jobject* ptr = j->val.dict;//shortcut
     // we at [
-    int c = fgetc(f);
-    exit_v(j,c, EOF, "fgetc");
-    assert(c == '[');
-    // printf("first char of list %c\n",c);
-    if (ws(f, (char*)&c, "after [")) {free(j);return NULL;}
-    // c=fgetc(f);exit_v(j,c,EOF,"fgetc");
+    if (*index>=str_len||str[*index]!='[') {
+        err->expected[0]='[';
+        goto array_err;
+    }
+    //go to after [
+    (*index)++;
+    //and skip whitespace
+    char c='\0';
+    if (ws(str,str_len,index, &c, err)) {goto array_err;}
+#if dbp
+    printf("after ws after [:%c\n", c);
+#endif
+
+    //we at char after [
     while (c != ']') {
-        // go past whitespace after { or ,
-        if (unget(c, f)) {free(j->val.array.arr);free(j);return NULL;}
-        if (isspace(c)) {
-            if (ws(f, (char*)&c, "parse_array")||unget(c, f)) {free(j->val.array.arr);free(j);return NULL;}
-        }
 #if dbp
         printf("c:%c\n", c);
 #endif
 
         // parse value
-        struct jobject* element = parse_any(f);
-        if (!element){free(j);return NULL;}
+        struct jobject* element = parse_any(str,str_len,index,err);
+        if (!element){free_object(j);return NULL;}
         (*len)++;
-        struct jobject *ptr;
+        struct jobject **ptr;
+        //check if we have an array
         if (!j->val.array.arr) {
-            ptr = malloc(sizeof(struct jobject));
-            exit_null(j,ptr, "malloc");
+            ptr = malloc(sizeof(struct jobject*));
+            if (!ptr) {err->errno_set=true;goto array_err;}
             j->val.array.arr = ptr;
         } else {
-            ptr = realloc(j->val.array.arr, *len * sizeof(struct jobject));
-            if (!ptr){free(j->val.array.arr);free(j);return NULL;}
+            ptr = realloc(j->val.array.arr, *len * sizeof(struct jobject*));
+            if (!ptr){err->errno_set=true;goto array_err;}
             exit_null(j,ptr, "realloc");
             j->val.array.arr = ptr;
         }
 #if dbp
         printf("*len(of array)=%zu\n",*len);
 #endif
-        ptr[*len - 1].type = element->type;
-        ptr[*len - 1].val = element->val;
+        //len-1 for last element
+        ptr[*len -1]=element;
 #if dbp
         printf("element: ");
-        print_object(&ptr[*len - 1]);
+        print_object(ptr[*len - 1]);
         printf("\n");
 #endif
-        // go up to the coomma or closing bracket
-        if (ws(f, (char*)&c, "parse_array")) {free(j->val.array.arr);free(j);return NULL;}
+        //may be whitespace after each value
+        // go up to the comma or closing bracket
+        if (ws(str,str_len,index, &c, err)||(c!=','&&c!=']')) {
+            err->expected[0]=',';
+            err->expected[1]=']';
+            goto array_err;
+        }
 #if dbp
         printf("after whitespace: %c\n", c);
 #endif
-        if (c == ']') {
-            break;
+        // we at comma or ]
+        //skip comma and go to first char of value but discard it for parse_any
+        if (c==',') {
+            //skip comma
+            (*index)++;
+            if (ws(str,str_len,index, &c, err)) {
+                err->expected[0]=']';
+                goto array_err;
+            }
+            //don't increment index
+            //so parse_any can read it
         }
-        // assert((c==',')||(c==']'));
-        // we at comma or }
-        c = fgetc(f);
-        if (c==EOF){free(j->val.array.arr);free(j);return NULL;}
     }
+    (*index)++;
     return j;
+array_err:
+    free_object(j);
+    err->iserr=true;
+    err->type=JARRAY;
+    err->pos=*index;
+    return NULL;
 }
-struct jobject* parse_object(FILE *f) {
+
+struct jobject* parse_object(char* str, size_t str_len, size_t* index, struct jerr* err) {
     // init object
     struct jobject* j=malloc(sizeof(struct jobject));
+    exit_malloc(JOBJECT);
     j->type = JOBJECT;
     j->val.dict = hm_create();
     hashmap_t *hm = j->val.dict; // shortcut
-                                // we at {
-    int c = fgetc(f);
-    if (c==EOF) {hm_free(hm);free(j);return NULL;}
-    assert(c == '{');
-    c = fgetc(f);
-    if (c==EOF) {hm_free(hm);free(j);return NULL;}
+    if (!hm) {
+        err->errno_set=true;
+        goto object_err;
+    }
+    // we at {
+    if (*index>=str_len||str[*index]!='{') {err->expected[0]='{';goto object_err;}
+    char c=str[(*index)];//;'{'
+//{ ""
 #if dbp
-    printf("parse object\n");
+    printf("parse object %c\n",c);
 #endif
     while (c != '}') {
         // go past whitespace after { or ,
-        if (unget(c, f)||ws(f, (char*)&c, "parse_object")|| unget(c, f)) {hm_free(hm);free(j);return NULL;}
+        (*index)++;
+        if (ws(str,str_len,index, &c, err)) {err->expected[0]='}';goto object_err;}
 #if dbp
         printf("begin of key: %c\n", c);
         fflush(stdout);
 #endif
         // parse key
-        struct jobject* s = parse_string(f);
-        if (!s) {hm_free(hm);free(j);return NULL;}
-        if (s->type!=JSTR) {free_object(s);hm_free(hm);free(j);return NULL;}
-        char *str = s->val.str;//already malloc'd
-                              // get : and whitespace
+        struct jobject* s = parse_string(str,str_len,index,err);
+        if (!s) {free_object(j);return NULL;}//err already set
+        if (s->type!=JSTR) {free_object(s);err->expected[0]='"';goto object_err;}
+        char *key = s->val.str;//already malloc'd
         free(s);//free jobject but not the inner string
-        if (ws(f, (char*)&c, "parse_object")) {free(s);hm_free(hm);free(j);return NULL;}
+        // go to :
+        if (*index>=str_len) {err->expected[0]=' ';err->expected[1]=':';free(key);goto object_err;}
+        c=str[*index];//;'{'
+        if (isspace(c)) {
+            if (ws(str,str_len,index, &c, err)) {free(key);goto object_err;}
+        }
+        //should be at :
+        if (*index>=str_len||str[*index]!=':') {err->expected[0]=':';free(key);goto object_err;}
 #if dbp
         printf("after key: %c\n", c);
         fflush(stdout);
 #endif
-        assert(c == ':');
+        (*index)++;
         // get whitespace and first char of value after :
-        // put back the value for parsing
-        if (ws(f, (char*)&c, "parse_object")||unget(c, f)) {free(s);hm_free(hm);free(j);return NULL;}
+        if (ws(str,str_len,index, &c, err)) {err->expected[0]='v';free(key);goto object_err;}
 
         // parse value
-        struct jobject* child = parse_any(f);
-        if (!child) {free(s);hm_free(hm);free(j);return NULL;}
-        struct key_pair pair = {str, *child};
-        free(child);
+        struct jobject* child = parse_any(str,str_len,index,err);
+        if (!child) {free(key);free_object(j);return NULL;}
+        struct key_pair pair = {key, child};
 #if dbp
-        printf("hm_setx(\"%s\",", str);
-        print_object(&child);
+        printf("hm_setx(\"%s\",", key);
+        print_object(child);
         printf(")\n");
 #endif
-        hm_setx(hm, hm_new(hm, str), &pair, sizeof(pair));
+        hm_setx(hm, hm_new(hm, key), &pair, sizeof(pair));
 #if dbp
         hm_debug(hm);
         printf("parsed value\n");
 #endif
 
-        // check for comma and skip it
-        if (ws(f, (char*)&c, "parse_object")) {free(s);hm_free(hm);free(j);return NULL;}
+        // go up to comma or }
+        if (ws(str,str_len,index, &c, err)) {err->expected[0]='}';err->expected[1]=',';goto object_err;}
+        if (c!='}'&&c!=',') {err->expected[0]='}';err->expected[1]=',';goto object_err;}
 #if dbp
         printf("obj: %c/%d\n", c, c);
         fflush(stdout);
 #endif
-        assert(c == ',' || c == '}');
-        if (c == '}') {
-            break;
-        }
-        // we at comma or }
-        c = fgetc(f);
-        if (c==EOF) {free(s);hm_free(hm);free(j);return NULL;}
     }
+    (*index)++;
     return j;
+object_err:
+    free_object(j);
+    err->iserr=true;
+    err->type=JOBJECT;
+    err->pos=*index;
+    if (*index<str_len) {err->got=str[*index];}
+    return NULL; 
 }
-enum type find_type(FILE *f) {
-    int c = fgetc(f);
-    if (c==EOF||unget((char)c, f)) {
-        return UNKNOWN;
-    }
+
+enum type find_type(char* str, size_t str_len, size_t* index) {
+    if (*index>=str_len) {return UNKNOWN;}                                        
+    char c = str[*index];
 #if dbp
     printf("find_type(%c)\n", c);
 #endif
@@ -412,36 +518,51 @@ enum type find_type(FILE *f) {
     }
 }
 // parse any type
-struct jobject* parse_any(FILE *f) {
-    switch (find_type(f)) {
+struct jobject* parse_any(char* str, size_t str_len, size_t* index, struct jerr* err) {
+    switch (find_type(str,str_len,index)) {
         case JOBJECT:
-            return parse_object(f);
+            return parse_object(str,str_len,index,err);
         case JSTR:
-            return parse_string(f);
+            return parse_string(str,str_len,index,err);
         case JNUMBER:
-            return parse_number(f);
+            return parse_number(str,str_len,index,err);
         case JARRAY:
-            return parse_array(f);
+            return parse_array(str,str_len,index,err);
         case JBOOL:
-            return parse_bool(f);
+            return parse_bool(str,str_len,index,err);
         case JNULL:
-            return parse_null(f);
+            return parse_null(str,str_len,index,err);
         case UNKNOWN:default:
+            err->iserr=true;
+            err->type=UNKNOWN;
+            err->pos=*index;
             return NULL;
             //fprintf(stderr, "Unknown type. pos:%ld", ftell(f));
     }
 }
 //sets errno
-struct jobject* load_file(FILE *f) {
+struct jobject* load_file(FILE *f,char** str_buf,size_t* str_len,struct jerr* err) {
     // load whatever kinda object this is
-    return parse_any(f);
+    *str_len=0;
+
+    fseek(f,0,SEEK_END);
+    size_t len=(size_t)ftell(f);
+    printf("len:%zu\n",len);
+    fseek(f,0,SEEK_SET);
+    *str_buf=malloc(len);
+    if (!(*str_buf)) {err->iserr=true;err->errno_set=true;return NULL;}
+    *str_len=len;
+    fread(*str_buf,1,len,f);
+    size_t index=0;
+    
+    return parse_any(*str_buf,len,&index,err);
 }
 //set errno
-struct jobject* load_fn(char *fn) {
+struct jobject* load_fn(char *fn,char** str_buf,size_t* str_len,struct jerr* err) {
     FILE *f = fopen(fn, "r");
-    if (!f) {return NULL;}
+    if (!f) {err->iserr=true;err->errno_set=true;return NULL;}
 
-    struct jobject* result = load_file(f);
+    struct jobject* result = load_file(f,str_buf,str_len,err);
 
     if (fclose(f)==EOF) {return NULL;}
     return result;
@@ -459,16 +580,16 @@ void free_object(struct jobject *j) {
                          struct key_pair *pair = (node->val);
                          //the STRING key
                          free(pair->key);
-                         free_object(&pair->val);
+                         free_object(pair->val);
                          node = node->next;
                      }
                      // after that, the key-value pair structs themselves are freed
                      hm_free(j->val.dict);
                      break;
         case JARRAY:
-                     //free each pointer
+                     //free each object
                      for (size_t i=0; i<(j->val.array.len); i++) {
-                         free_object(&j->val.array.arr[i]);
+                         free_object(j->val.array.arr[i]);
                      }
                      //free vec
                      free(j->val.array.arr);
@@ -528,7 +649,7 @@ bool fprint_object(FILE* f,struct jobject *j) {
             while (node) {
                 struct key_pair *pair = node->val;
                 exit_neg(fprintf(f,"\"%s\":", pair->key),"fprint_object");
-                fprint_object(f,&pair->val);
+                fprint_object(f,pair->val);
                 node = node->next;
                 if (node) {
                     exit_neg(fprintf(f,", "),"fprint_object");
@@ -540,7 +661,7 @@ bool fprint_object(FILE* f,struct jobject *j) {
             exit_neg(fprintf(f,"["),"fprint_object");
             struct array array = j->val.array;
             for (size_t i = 0; i < array.len; i++) {
-                fprint_object(f,&array.arr[i]);
+                fprint_object(f,array.arr[i]);
                 if (i != array.len - 1) {
                     exit_neg(fprintf(f,", "),"fprint_object");
                 }
@@ -663,7 +784,7 @@ char* sprint_object(struct jobject *j,char* buf,size_t* offset,size_t *buf_len) 
                 buf[(*offset)]='\0';
 
                 //print object
-                buf=sprint_object(&pair->val,buf,offset,buf_len);
+                buf=sprint_object(pair->val,buf,offset,buf_len);
                 if (!buf){return NULL;}
 
 
@@ -688,7 +809,7 @@ char* sprint_object(struct jobject *j,char* buf,size_t* offset,size_t *buf_len) 
             buf[(*offset)]='\0';
             struct array array = j->val.array;
             for (size_t i = 0; i < array.len; i++) {
-                buf=sprint_object(&array.arr[i],buf,offset,buf_len);
+                buf=sprint_object(array.arr[i],buf,offset,buf_len);
                 if (!buf){return NULL;}
                 if (i != array.len - 1) {
                     buf=wbuf(buf,*offset,buf_len,3);
