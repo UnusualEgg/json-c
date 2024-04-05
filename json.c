@@ -308,6 +308,7 @@ struct jobject* parse_string(char* str, size_t str_len, size_t* index, struct je
 expected_quote:
     err->expected[0]='\"';
 string_err:
+    if (*index<str_len){err->got=str[*index];}
     //only free inner string if we have it
     if (j->val.str) {
         free_object(j);
@@ -405,6 +406,7 @@ array_err:
     err->iserr=true;
     err->type=JARRAY;
     err->pos=*index;
+    if (*index<str_len){err->got=str[*index];}
     return NULL;
 }
 #if dbp
