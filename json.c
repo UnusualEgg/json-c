@@ -440,6 +440,8 @@ struct jobject* parse_object(char* str, size_t str_len, size_t* index, struct je
         // go past whitespace after { or ,
         (*index)++;
         if (ws(str,str_len,index, &c, err)) {err->expected[0]='}';goto object_err;}
+        //this accounts for empty objects
+        if (c=='}') {break;}
 #if dbp
         printf("begin of key: %c\n", c);
         fflush(stdout);
@@ -557,7 +559,9 @@ struct jobject* load_file(FILE *f,char** str_buf,size_t* str_len,struct jerr* er
 
     fseek(f,0,SEEK_END);
     size_t len=(size_t)ftell(f);
+#if dbp
     printf("len:%zu\n",len);
+#endif
     fseek(f,0,SEEK_SET);
     *str_buf=malloc(len);
     if (!(*str_buf)) {err->iserr=true;err->errno_set=true;return NULL;}
