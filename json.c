@@ -39,6 +39,7 @@ void consume(size_t *index, struct jerr *err, size_t count) {
 void newline(struct jerr *err, size_t *index) {
     err->line++;
     err->last_nl = *index - 1;
+    (*index)++;
 }
 bool unget(char c, FILE *f) { return ungetc((char)c, f) == EOF; }
 // c to change
@@ -79,22 +80,23 @@ void print_jerr_str(struct jerr *err, char *str) {
         return;
     }
     size_t col = jerr_get_col(err);
-    size_t start = err->last_nl;
+    size_t start = err->last_nl + 1;
     char *line_str = &str[start];
     char *end = NULL;
     if (str)
-        end = strchr(line_str, '\n');
+        end = strchr(line_str, '\n') - 2;
     size_t len;
     if (!end && str)
         len = start - strlen(str);
     else
         len = end - str;
     printf("len:%d col:%d start: %zu\n", (int)len, (int)col, start);
-    printf("%d\n", str[3]);
+    printf("line_str:[%s]\n", line_str);
+    printf("|\"%d\"|\n", str[3]);
     fflush(stdout);
 
     if (str)
-        fprintf(stderr, "%*s\n,%*c\n", (int)len, line_str, (int)col, '^');
+        fprintf(stderr, "%.*s\n%*c\n", (int)len, line_str, (int)col + 1, '^');
     fprintf(stderr, "Error parsing %s | Position:%zu(line:%zu col:%zu) | Expected: ",
             type_to_str(err->type), err->pos - err->last_nl, err->line, jerr_get_col(err));
     // print each expectd
@@ -692,7 +694,7 @@ struct jvalue *load_file(FILE *f, char **str_buf, size_t *str_len, struct jerr *
     printf("len:%zu\n", len);
 #endif
     fseek(f, 0, SEEK_SET);
-    *str_buf = malloc(len);
+    *str_buf = malloc(len + 1);
     if (!(*str_buf)) {
         err->iserr = true;
         err->errno_set = true;
@@ -700,7 +702,7 @@ struct jvalue *load_file(FILE *f, char **str_buf, size_t *str_len, struct jerr *
     }
     *str_len = len;
     fread(*str_buf, 1, len, f);
-    str_buf[len - 1] = '\0';
+    (*str_buf)[len] = '\0';
     size_t index = 0;
 
     return parse_any(*str_buf, len, &index, err);
