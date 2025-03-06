@@ -38,8 +38,7 @@ void consume(size_t *index, struct jerr *err, size_t count) {
 }
 void newline(struct jerr *err, size_t *index) {
     err->line++;
-    err->last_nl = *index - 1;
-    (*index)++;
+    err->last_nl = *index;
 }
 bool unget(char c, FILE *f) { return ungetc((char)c, f) == EOF; }
 // c to change
@@ -60,10 +59,11 @@ bool ws(char *str, size_t str_len, size_t *index, char *c, struct jerr *err) {
         if (*index >= str_len) {
             return true;
         }
-        *c = str[(*index)++];
+        *c = str[(*index)];
         if (*c == '\n') {
             newline(err, index);
         }
+        (*index)++;
     } while (isspace(*c));
     (*index)--;
     // now c==[*index]
@@ -80,23 +80,33 @@ void print_jerr_str(struct jerr *err, char *str) {
         return;
     }
     size_t col = jerr_get_col(err);
-    size_t start = err->last_nl + 1;
+    size_t start = err->last_nl+1;
     char *line_str = &str[start];
     char *end = NULL;
-    if (str)
-        end = strchr(line_str, '\n') - 2;
-    size_t len;
-    if (!end && str)
-        len = start - strlen(str);
-    else
+    if (str) {
+        end = strchr(line_str, '\n')-1;
+    }
+    size_t len=0;
+    if (!end && str) {
+
+        len = strlen(line_str);
+        printf("using strlen: %zu\n",len);
+    }
+    else if (str) {
         len = end - str;
+        printf("using newline: %zu\n",len);
+    }
     printf("len:%d col:%d start: %zu\n", (int)len, (int)col, start);
     printf("line_str:[%s]\n", line_str);
     printf("|\"%d\"|\n", str[3]);
     fflush(stdout);
 
-    if (str)
-        fprintf(stderr, "%.*s\n%*c\n", (int)len, line_str, (int)col + 1, '^');
+    if (str) {
+        for (size_t i=0;i<len;i++) {
+            fputc(line_str[i],stderr);
+        }
+        fprintf(stderr, "\n%*c\n", (int)col, '^');
+    }
     fprintf(stderr, "Error parsing %s | Position:%zu(line:%zu col:%zu) | Expected: ",
             type_to_str(err->type), err->pos - err->last_nl, err->line, jerr_get_col(err));
     // print each expectd
