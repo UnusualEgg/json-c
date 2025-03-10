@@ -25,10 +25,13 @@ int main(int argc, char **argv) {
         free(buf);
         exit(EXIT_FAILURE);
     }
-    print_value(j);
+    // print_value(j);
     printf("\n");
+    char *out_buf = sprint_value_normal(j);
+    printf("%s\n", out_buf);
     free_object(j);
     free(buf);
+    free(out_buf);
 
     return 0;
 }

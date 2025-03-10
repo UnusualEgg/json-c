@@ -1,6 +1,6 @@
 // debug print
 #ifndef dbp
-#define dbp 1
+#define dbp 0
 #endif
 
 #include "json.h"
@@ -39,7 +39,6 @@ void consume(size_t *index, struct jerr *err, size_t count) {
 void newline(struct jerr *err, size_t *index) {
     err->line++;
     err->last_nl = *index - 1;
-    (*index)++;
 }
 bool unget(char c, FILE *f) { return ungetc((char)c, f) == EOF; }
 // c to change
@@ -56,9 +55,11 @@ bool unget(char c, FILE *f) { return ungetc((char)c, f) == EOF; }
 //- while (isspace(c)):c=[*index++]
 //- if (c!=[*index]): *index--
 bool ws(char *str, size_t str_len, size_t *index, char *c, struct jerr *err) {
+    if (*index >= str_len)
+        return true;
     do {
-        if (*index >= str_len) {
-            return true;
+        if (*index == str_len) {
+            break;
         }
         *c = str[(*index)++];
         if (*c == '\n') {
@@ -66,6 +67,9 @@ bool ws(char *str, size_t str_len, size_t *index, char *c, struct jerr *err) {
         }
     } while (isspace(*c));
     (*index)--;
+#if dbp
+    printf("ws end at %zu\n", *index);
+#endif
     // now c==[*index]
     return false;
 }
@@ -81,24 +85,31 @@ void print_jerr_str(struct jerr *err, char *str) {
     }
     size_t col = jerr_get_col(err);
     size_t start = err->last_nl + 1;
+    // size_t col = err->pos - start - 1;
     char *line_str = &str[start];
     char *end = NULL;
-    if (str)
-        end = strchr(line_str, '\n') - 2;
-    size_t len;
-    if (!end && str)
-        len = start - strlen(str);
-    else
-        len = end - str;
+    size_t len = 0;
+    if (str) {
+        end = strchr(line_str, '\n');
+        if (end) {
+            len = end - line_str;
+            if (col > len) {
+                col = len + 1;
+            }
+            printf("found newline at %zu\n", end - line_str);
+        } else {
+            len = start - strlen(str);
+        }
+    }
     printf("len:%d col:%d start: %zu\n", (int)len, (int)col, start);
-    printf("line_str:[%s]\n", line_str);
-    printf("|\"%d\"|\n", str[3]);
-    fflush(stdout);
 
     if (str)
-        fprintf(stderr, "%.*s\n%*c\n", (int)len, line_str, (int)col + 1, '^');
+#if dbp != 0
+        printf("line_str:[%s]\n", line_str);
+#endif
+    fprintf(stderr, "%.*s\n%*c\n", (int)len, line_str, (int)col, '^');
     fprintf(stderr, "Error parsing %s | Position:%zu(line:%zu col:%zu) | Expected: ",
-            type_to_str(err->type), err->pos - err->last_nl, err->line, jerr_get_col(err));
+            type_to_str(err->type), err->pos - err->last_nl, err->line, col);
     // print each expectd
     for (int i = 0; i < 3; i++) {
         char c = err->expected[i];
@@ -603,6 +614,9 @@ struct jvalue *parse_object(char *str, size_t str_len, size_t *index, struct jer
 
         // go up to comma or }
         if (ws(str, str_len, index, &c, err)) {
+#if dbp
+            printf("ws EOF\n");
+#endif
             err->expected[0] = '}';
             err->expected[1] = ',';
             goto object_err;
@@ -868,9 +882,10 @@ char *wbuf(char *buf, size_t offset, size_t *buf_len, size_t data_len) {
     if (!buf) {
         return NULL;
     }
-    if (offset + data_len > (*buf_len) - 1) {
-        char *new = realloc(buf, offset + data_len);
-        *buf_len += data_len;
+    size_t new_len = offset + data_len + 1;
+    if (new_len >= (*buf_len)) {
+        char *new = realloc(buf, new_len);
+        *buf_len = new_len;
         if (!new) {
             free(buf);
             return NULL;
@@ -887,19 +902,25 @@ char *sprint_string(char *str, char *buf, size_t *offset, size_t *buf_len) {
     if (!buf) {
         return NULL;
     }
-    for (size_t i = 0; i < len + 1; i++) {
+    for (size_t i = 0; i < len; i++) {
         char ch = str[i];
         switch (ch) {
             case '\"':
-                buf = wbuf(buf, *offset, buf_len, 1);
+#if dbp != 0
+                printf("buf_len pre:%zu and at %zu buf:%p\n", *buf_len, *offset, (void *)buf);
+#endif
+                buf = wbuf(buf, *offset, buf_len, 2);
                 if (!buf) {
                     return NULL;
                 }
+#if dbp != 0
+                printf("buf_len after:%zu at %zu\n", *buf_len, *offset);
+#endif
                 buf[(*offset)++] = '\\';
                 buf[(*offset)++] = '"';
                 break;
             case '\\':
-                buf = wbuf(buf, *offset, buf_len, 1);
+                buf = wbuf(buf, *offset, buf_len, 2);
                 if (!buf) {
                     return NULL;
                 }
@@ -907,24 +928,32 @@ char *sprint_string(char *str, char *buf, size_t *offset, size_t *buf_len) {
                 buf[(*offset)++] = '\\';
                 break;
             case '\n':
-                buf = wbuf(buf, *offset, buf_len, 1);
+                buf = wbuf(buf, *offset, buf_len, 2);
                 if (!buf) {
                     return NULL;
                 }
                 buf[(*offset)++] = '\\';
-                buf[(*offset)++] = '"';
+                buf[(*offset)++] = 'n';
                 break;
             case '\t':
-                buf = wbuf(buf, *offset, buf_len, 1);
+                buf = wbuf(buf, *offset, buf_len, 2);
                 if (!buf) {
                     return NULL;
                 }
                 buf[(*offset)++] = '\\';
-                buf[(*offset)++] = '"';
+                buf[(*offset)++] = 't';
                 break;
             default:
+                buf = wbuf(buf, *offset, buf_len, 1);
+                if (!buf) {
+                    return NULL;
+                }
                 buf[(*offset)++] = ch;
         }
+    }
+    buf = wbuf(buf, *offset, buf_len, 1);
+    if (!buf) {
+        return NULL;
     }
     buf[*offset] = '\0';
     return buf;
@@ -960,7 +989,7 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
         case JSTR:
             s = j->val.str;
             // 2 extra char's
-            buf = wbuf(buf, *offset, buf_len, 2);
+            buf = wbuf(buf, *offset, buf_len, 3);
             if (!buf) {
                 return NULL;
             }
@@ -977,7 +1006,7 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
         case UNKNOWN:
             s = "UNKNOWN";
             len = strlen(s);
-            buf = wbuf(buf, *offset, buf_len, len);
+            buf = wbuf(buf, *offset, buf_len, len + 1);
             if (!buf) {
                 return NULL;
             }
@@ -990,7 +1019,7 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
             } else {
                 len = snprintf(num_buf, 1024, "%lf", j->val.number.num.d);
             }
-            buf = wbuf(buf, *offset, buf_len, len);
+            buf = wbuf(buf, *offset, buf_len, len + 1);
             if (!buf) {
                 return NULL;
             }
@@ -1002,7 +1031,7 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
             if (j->val.boolean) {
                 s = "true";
                 len = strlen(s);
-                buf = wbuf(buf, *offset, buf_len, len);
+                buf = wbuf(buf, *offset, buf_len, len + 1);
                 if (!buf) {
                     return NULL;
                 }
@@ -1012,7 +1041,7 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
             } else {
                 s = "false";
                 len = strlen(s);
-                buf = wbuf(buf, *offset, buf_len, len);
+                buf = wbuf(buf, *offset, buf_len, len + 1);
                 if (!buf) {
                     return NULL;
                 }
@@ -1024,7 +1053,7 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
         case JNULL:
             s = "null";
             len = strlen(s);
-            buf = wbuf(buf, *offset, buf_len, len);
+            buf = wbuf(buf, *offset, buf_len, len + 1);
             if (!buf) {
                 return NULL;
             }
@@ -1043,12 +1072,15 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
             while (node) {
                 struct key_pair *pair = node->val;
                 char *s = pair->key;
-                buf = wbuf(buf, *offset, buf_len, 4); //+2 for ", " | +2 for ':', ' '
+                buf = wbuf(buf, *offset, buf_len, 5); //+2 for ", " | +2 for ':', ' '
                 if (!buf) {
                     return NULL;
                 }
                 buf[(*offset)++] = '"';
                 buf = sprint_string(s, buf, offset, buf_len);
+                if (!buf)
+                    return NULL;
+                buf = wbuf(buf, *offset, buf_len, 4);
                 if (!buf)
                     return NULL;
                 buf[(*offset)++] = '"';
@@ -1065,7 +1097,7 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
 
                 node = node->next;
                 if (node) {
-                    buf = wbuf(buf, *offset, buf_len, 2);
+                    buf = wbuf(buf, *offset, buf_len, 3);
                     if (!buf) {
                         return NULL;
                     }
@@ -1074,10 +1106,13 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
                     buf[(*offset)] = '\0';
                 }
             }
-            buf = wbuf(buf, *offset, buf_len, 1);
+            buf = wbuf(buf, *offset, buf_len, 2);
             if (!buf) {
                 return NULL;
             }
+#if dbp != 0
+            printf("buf_len:%zu\n", *buf_len);
+#endif
             buf[(*offset)++] = '}';
             buf[(*offset)] = '\0';
             return buf;

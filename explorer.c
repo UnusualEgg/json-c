@@ -167,12 +167,14 @@ void add_items(struct jvalue *curr, ITEM ***items_array, size_t *items_len, char
                 if (*src == '\0') {
                     src = " ";
                 }
-                size_t len = strlen(src);
-                buf = malloc(len + 1 + 8 + 1 + 1); //(type)\0
+                size_t str_buf_len = 0;
+                struct jvalue key = {.type = JSTR, .val = {.str = pair->key}};
+                char *buf = sprint_value(&key, NULL, NULL, &str_buf_len);
+                exit_null(buf, "sprint_value");
+                size_t len = str_buf_len;
+                buf = realloc(buf, len + 1 + 8 + 1 + 1); //(type)\0
                 exit_null(buf, "malloc");
-                memcpy(buf, src, len + 1);
-                buf[len] = '(';
-                buf[len + 1] = '\0';
+                strcat(buf, "(");
                 strncat(buf, type_to_str(pair->val->type), 8);
                 strcat(buf, ")");
                 append_str(strings_array, strings_len, *item_i, buf);
@@ -208,12 +210,18 @@ void add_items(struct jvalue *curr, ITEM ***items_array, size_t *items_len, char
                         snprintf(buf, COLS, "%u: array[%zu]", i, arr.arr[i]->val.array.len);
                         break;
                     case JSTR:;
-                        size_t len = strlen(arr.arr[i]->val.str);
+                        char *str_buf = malloc(buf_len);
+                        exit_null(str_buf, "malloc");
+                        str_buf = sprint_value(arr.arr[i], str_buf, NULL, &buf_len);
+                        exit_null(buf, "sprint_value");
+                        size_t len = strlen(str_buf);
                         if (len < (size_t)COLS - 4) {
-                            snprintf(buf, COLS, "%u: \"%s\"", i, arr.arr[i]->val.str);
+                            snprintf(buf, COLS, "%u: %s", i, str_buf);
                         } else {
                             snprintf(buf, COLS, "%u: string[%zu]", i, len);
                         }
+                        free(str_buf);
+                        buf_len = COLS;
                         break;
                     case JNUMBER:
                     case JBOOL:
