@@ -1,6 +1,6 @@
 // debug print
 #ifndef dbp
-#define dbp 0
+#define dbp 1
 #endif
 
 #include "json.h"
@@ -32,6 +32,36 @@
         err->errno_set = true;                                                                     \
         return NULL;                                                                               \
     }
+
+// manipulation
+struct jvalue *jobj_get(struct jvalue *value, const char *key) {
+    if (value->type != JOBJECT)
+        return NULL;
+    struct key_pair *pair = hm_get(value->val.obj, key);
+    if (!pair)
+        return NULL;
+    return pair->val;
+}
+char *jstr_get(struct jvalue *value) {
+    if (value->type != JSTR)
+        return NULL;
+    return value->val.str;
+}
+bool jbool_get(struct jvalue *value) { return value->val.boolean; }
+jnumber *jnumber_get(struct jvalue *value) { return &value->val.number; }
+struct jvalue *jarray_get(struct jvalue *value, size_t index) {
+    if (value->type != JARRAY || index >= value->val.array.len) {
+        return NULL;
+    }
+    return value->val.array.arr[index];
+}
+const size_t *jarray_len(struct jvalue *value) {
+    if (value->type != JARRAY) {
+        return NULL;
+    }
+    return &value->val.array.len;
+}
+
 void consume(size_t *index, struct jerr *err, size_t count) {
     (*index) += count;
     err->pos += count;
@@ -155,7 +185,7 @@ struct jvalue *parse_null(char *str, size_t str_len, size_t *index, struct jerr 
         return NULL;
     }
     // init object
-    struct jvalue *j = malloc(sizeof(struct jvalue));
+    struct jvalue *j = JSON_MALLOC(sizeof(struct jvalue));
     exit_malloc(JNULL);
     j->type = JNULL;
     j->val.null = '\0';
@@ -169,7 +199,7 @@ struct jvalue *parse_bool(char *str, size_t str_len, size_t *index, struct jerr 
         goto bool_err;
     }
     // init object
-    struct jvalue *j = malloc(sizeof(struct jvalue));
+    struct jvalue *j = JSON_MALLOC(sizeof(struct jvalue));
     exit_malloc(JBOOL);
     j->type = JBOOL;
     // now parse
@@ -193,7 +223,7 @@ bool_err:
 }
 struct jvalue *parse_number(char *str, size_t str_len, size_t *index, struct jerr *err) {
     // init object
-    struct jvalue *j = malloc(sizeof(struct jvalue));
+    struct jvalue *j = JSON_MALLOC(sizeof(struct jvalue));
     exit_malloc(JNUMBER);
     j->type = JNUMBER;
     j->val.number.islong = true;
@@ -252,7 +282,7 @@ number_err:
 }
 struct jvalue *parse_string(char *str, size_t str_len, size_t *index, struct jerr *err) {
     // init object
-    struct jvalue *j = malloc(sizeof(struct jvalue));
+    struct jvalue *j = JSON_MALLOC(sizeof(struct jvalue));
     exit_malloc(JSTR);
     j->type = JSTR;
     j->val.str = NULL;
@@ -303,7 +333,7 @@ struct jvalue *parse_string(char *str, size_t str_len, size_t *index, struct jer
     // now we got the literal characters in
     //  actually parse stirng
     *index = begining;
-    char *buf = malloc(len + 1); //+1 for '\0'
+    char *buf = JSON_MALLOC(len + 1); //+1 for '\0'
     j->val.str = buf;
     if (!buf) {
         err->errno_set = true;
@@ -403,7 +433,7 @@ string_err:
 
 struct jvalue *parse_array(char *str, size_t str_len, size_t *index, struct jerr *err) {
     // init object
-    struct jvalue *j = malloc(sizeof(struct jvalue));
+    struct jvalue *j = JSON_MALLOC(sizeof(struct jvalue));
     exit_malloc(JARRAY);
     j->type = JARRAY;
     j->val.array.arr = NULL;
@@ -442,14 +472,14 @@ struct jvalue *parse_array(char *str, size_t str_len, size_t *index, struct jerr
         struct jvalue **ptr;
         // check if we have an array
         if (!j->val.array.arr) {
-            ptr = malloc(sizeof(struct jvalue *));
+            ptr = JSON_MALLOC(sizeof(struct jvalue *));
             if (!ptr) {
                 err->errno_set = true;
                 goto array_err;
             }
             j->val.array.arr = ptr;
         } else {
-            ptr = realloc(j->val.array.arr, *len * sizeof(struct jvalue *));
+            ptr = JSON_REALLOC(j->val.array.arr, *len * sizeof(struct jvalue *));
             if (!ptr) {
                 err->errno_set = true;
                 goto array_err;
@@ -513,7 +543,7 @@ void pair_printer(struct hashmap_node *node) {
 #endif
 struct jvalue *parse_object(char *str, size_t str_len, size_t *index, struct jerr *err) {
     // init object
-    struct jvalue *j = malloc(sizeof(struct jvalue));
+    struct jvalue *j = JSON_MALLOC(sizeof(struct jvalue));
     exit_malloc(JOBJECT);
     j->type = JOBJECT;
     j->val.obj = hm_create();
@@ -708,7 +738,7 @@ struct jvalue *load_file(FILE *f, char **str_buf, size_t *str_len, struct jerr *
     printf("len:%zu\n", len);
 #endif
     fseek(f, 0, SEEK_SET);
-    *str_buf = malloc(len + 1);
+    *str_buf = JSON_MALLOC(len + 1);
     if (!(*str_buf)) {
         err->iserr = true;
         err->errno_set = true;
@@ -750,7 +780,7 @@ void free_object(struct jvalue *j) {
                 // freed
                 struct key_pair *pair = (node->val);
                 // the STRING key
-                free(pair->key);
+                JSON_FREE(pair->key);
                 free_object(pair->val);
                 node = node->next;
             }
@@ -763,10 +793,10 @@ void free_object(struct jvalue *j) {
                 free_object(j->val.array.arr[i]);
             }
             // free vec
-            free(j->val.array.arr);
+            JSON_FREE(j->val.array.arr);
             break;
         case JSTR:
-            free(j->val.str);
+            JSON_FREE(j->val.str);
             break;
         case UNKNOWN: // we'll accept this
         case JNUMBER:
@@ -775,7 +805,7 @@ void free_object(struct jvalue *j) {
             // not malloc'd
             break;
     }
-    free(j);
+    JSON_FREE(j);
 }
 void print_value(struct jvalue *j) { fprint_value(stdout, j); }
 // true if success
@@ -884,7 +914,7 @@ char *wbuf(char *buf, size_t offset, size_t *buf_len, size_t data_len) {
     }
     size_t new_len = offset + data_len + 1;
     if (new_len >= (*buf_len)) {
-        char *new = realloc(buf, new_len);
+        char *new = JSON_REALLOC(buf, new_len);
         *buf_len = new_len;
         if (!new) {
             free(buf);
@@ -974,7 +1004,7 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
     }
     assert(offset);
     if (!buf) {
-        buf = malloc(8);
+        buf = JSON_MALLOC(8);
         *buf_len = 8;
         if (!buf) {
             return NULL;

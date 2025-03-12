@@ -1,3 +1,19 @@
+#ifndef JSON_MALLOC
+#define JSON_MALLOC(s) malloc(s)
+#endif
+#ifndef JSON_FREE
+#define JSON_FREE(p) free(p)
+#endif
+#ifndef JSON_REALLOC
+#define JSON_REALLOC(p, s) realloc(p, s)
+#endif
+#ifndef HM_MALLOC
+#define HM_MALLOC(s) JSON_MALLOC(s)
+#endif
+#ifndef HM_FREE
+#define HM_FREE(p) JSON_FREE(p)
+#endif
+
 #include <hashmap.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -68,6 +84,11 @@ void print_jerr(struct jerr *err);
 void print_jerr_str(struct jerr *err, char *str);
 const char *type_to_str(enum type type);
 void copy_to(struct jvalue *dest, struct jvalue *src);
+// manipulation
+struct jvalue *jobj_get(struct jvalue *value, const char *key);
+char *jstr_get(struct jvalue *value);
+struct jvalue *jarray_get(struct jvalue *value, size_t index);
+const size_t *jarray_len(struct jvalue *value);
 
 // parsing
 // these are recursive
