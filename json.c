@@ -101,10 +101,10 @@ void print_jerr_str(struct jerr *err, char *str) {
             len = start - strlen(str);
         }
     }
-    printf("len:%d col:%d start: %zu\n", (int)len, (int)col, start);
+    fprintf(stderr, "len:%d col:%d start: %zu\n", (int)len, (int)col, start);
 
-    if (str)
 #if dbp != 0
+    if (str)
         printf("line_str:[%s]\n", line_str);
 #endif
     fprintf(stderr, "%.*s\n%*c\n", (int)len, line_str, (int)col, '^');
@@ -119,9 +119,9 @@ void print_jerr_str(struct jerr *err, char *str) {
         fprintf(stderr, "'%c' ", c);
     }
     if (err->got) {
-        printf("but got '%c'", err->got);
+        fprintf(stderr, "but got '%c'", err->got);
     }
-    printf("\n");
+    fprintf(stderr, "\n");
 }
 
 const char *type_to_str(enum type type) {
@@ -722,7 +722,7 @@ struct jvalue *load_file(FILE *f, char **str_buf, size_t *str_len, struct jerr *
     return parse_any(*str_buf, len, &index, err);
 }
 // set errno
-struct jvalue *load_filename(char *fn, char **str_buf, size_t *str_len, struct jerr *err) {
+struct jvalue *load_filename(const char *fn, char **str_buf, size_t *str_len, struct jerr *err) {
     FILE *f = fopen(fn, "r");
     if (!f) {
         err->iserr = true;
@@ -779,7 +779,7 @@ void free_object(struct jvalue *j) {
 }
 void print_value(struct jvalue *j) { fprint_value(stdout, j); }
 // true if success
-bool serialize(char *fn, struct jvalue *j) {
+bool serialize(const char *fn, struct jvalue *j) {
     FILE *f = fopen(fn, "w");
     if (!f) {
         return false;

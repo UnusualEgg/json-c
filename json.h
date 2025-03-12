@@ -90,7 +90,7 @@ enum type find_type(char *str, size_t str_len, size_t *index);
 // only keep str for errors... and for users
 struct jvalue *load_file(FILE *f, char **str_buf, size_t *str_len, struct jerr *err);
 // set errno
-struct jvalue *load_filename(char *fn, char **str_buf, size_t *str_len, struct jerr *err);
+struct jvalue *load_filename(const char *fn, char **str_buf, size_t *str_len, struct jerr *err);
 // unload
 void free_object(struct jvalue *j);
 
@@ -98,7 +98,7 @@ void free_object(struct jvalue *j);
 void print_value(struct jvalue *j);
 // true if error
 bool fprint_value(FILE *f, struct jvalue *j);
-bool serialize(char *fn, struct jvalue *j);
+bool serialize(const char *fn, struct jvalue *j);
 // see json.c comments for details
 char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len);
 char *sprint_string(char *str, char *buf, size_t *offset, size_t *buf_len);
