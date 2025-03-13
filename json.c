@@ -1,6 +1,6 @@
 // debug print
 #ifndef dbp
-#define dbp 1
+#define dbp 0
 #endif
 
 #include "json.h"
@@ -41,6 +41,11 @@ struct jvalue *jobj_get(struct jvalue *value, const char *key) {
     if (!pair)
         return NULL;
     return pair->val;
+}
+bool jobj_del(struct jvalue *value, const char *key) {
+    if (!value)
+        return false;
+    return hm_delete(value->val.obj, key, strlen(key));
 }
 char *jstr_get(struct jvalue *value) {
     if (value->type != JSTR)

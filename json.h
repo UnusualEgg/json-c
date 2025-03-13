@@ -86,6 +86,8 @@ const char *type_to_str(enum type type);
 void copy_to(struct jvalue *dest, struct jvalue *src);
 // manipulation
 struct jvalue *jobj_get(struct jvalue *value, const char *key);
+// returns true if found and deleted
+bool jobj_del(struct jvalue *value, const char *key);
 char *jstr_get(struct jvalue *value);
 struct jvalue *jarray_get(struct jvalue *value, size_t index);
 const size_t *jarray_len(struct jvalue *value);
