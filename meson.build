@@ -6,7 +6,6 @@ project(
     'warning_level=3',
     'b_sanitize=address,undefined',
     'prefer_static=true',
-    'c_args=[-g -O0]',
   ],
 )
 #libs
