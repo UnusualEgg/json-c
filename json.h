@@ -84,6 +84,7 @@ void print_jerr(struct jerr *err);
 void print_jerr_str(struct jerr *err, char *str);
 const char *type_to_str(enum type type);
 void copy_to(struct jvalue *dest, struct jvalue *src);
+struct jvalue *jvalue_clone(struct jvalue *j);
 // manipulation
 struct jvalue *jobj_get(struct jvalue *value, const char *key);
 // returns true if found and deleted
