@@ -113,6 +113,50 @@ void copy_to(struct jvalue *dest, struct jvalue *src) {
     dest->type = src->type;
     dest->val = src->val;
 }
+struct jvalue *jvalue_clone(struct jvalue *j) {
+    struct jvalue *new = malloc(sizeof(struct jvalue));
+    if (!new)
+        return NULL;
+    new->type = j->type;
+    switch (new->type) {
+        case UNKNOWN:
+        case JNUMBER:
+        case JBOOL:
+        case JNULL: {
+            new->val = j->val;
+            break;
+        }
+        case JSTR: {
+            new->val.str = strdup(j->val.str);
+            break;
+        }
+        case JARRAY: {
+            jarray *arr = &new->val.array;
+            jarray *j_arr = &j->val.array;
+            arr->len = j_arr->len;
+            arr->arr = malloc(sizeof(struct jvalue *) * arr->len);
+            for (size_t i = 0; i < arr->len; i++) {
+                arr->arr[i] = jvalue_clone(j_arr->arr[i]);
+            }
+            break;
+        }
+        case JOBJECT: {
+            // copies the struct key_pair's
+            // also includes ptr to old jvalue(pair->val)
+            new->val.obj = hm_clone(j->val.obj);
+            jobj new_obj = new->val.obj;
+            for (size_t i = 0; i < j->val.obj->len; i++) {
+                struct key_pair *pair = j->val.obj->nodes[i].val;
+                struct key_pair *new_pair = new_obj->nodes[i].val;
+                // the pair is copied over including the old pair->val
+                // so replace pair->val with a newly allocated jvalue
+                new_pair->val = jvalue_clone(pair->val);
+            }
+            break;
+        }
+    }
+    return new;
+}
 size_t jerr_get_col(struct jerr *err) { return err->pos - err->last_nl; }
 void print_jerr_str(struct jerr *err, char *str) {
     if (!err->iserr) {
@@ -150,13 +194,14 @@ void print_jerr_str(struct jerr *err, char *str) {
         char c = err->expected[i];
         if (c == '\0') {
             break;
+
+            fprintf(stderr, "'%c' ", c);
         }
-        fprintf(stderr, "'%c' ", c);
+        if (err->got) {
+            fprintf(stderr, "but got '%c'", err->got);
+        }
+        fprintf(stderr, "\n");
     }
-    if (err->got) {
-        fprintf(stderr, "but got '%c'", err->got);
-    }
-    fprintf(stderr, "\n");
 }
 
 const char *type_to_str(enum type type) {
@@ -995,9 +1040,9 @@ char *sprint_string(char *str, char *buf, size_t *offset, size_t *buf_len) {
 }
 char *sprint_value_normal(struct jvalue *j) { return sprint_value(j, NULL, NULL, NULL); }
 // offset can't be null and should be set to 0
-// on success wil return an allocated buffer(char* buf may be invalid(ralloc'd) at this point) that
-// isn't- guaranteed to have a null terminator offset will contain the new length on error returns
-// null, but offset will be amount of characters successful (and the buffer is freed)
+// on success wil return an allocated buffer(char* buf may be invalid(ralloc'd) at this point)
+// that isn't- guaranteed to have a null terminator offset will contain the new length on error
+// returns null, but offset will be amount of characters successful (and the buffer is freed)
 char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len) {
     size_t offset_temp = 0;
     size_t buf_len_temp = 0;
