@@ -63,7 +63,7 @@ struct jvalue {
 };
 // so we have the (unhashed) key string
 struct key_pair {
-    char *key;
+    const char *key;
     struct jvalue *val;
 };
 // errors
@@ -90,6 +90,7 @@ struct jvalue *jobj_get(struct jvalue *value, const char *key);
 // returns true if found and deleted
 bool jobj_del(struct jvalue *value, const char *key);
 char *jstr_get(struct jvalue *value);
+struct jvalue *jobj_set(struct jvalue *obj, const char *key,struct jvalue *value);
 struct jvalue *jarray_get(struct jvalue *value, size_t index);
 const size_t *jarray_len(struct jvalue *value);
 

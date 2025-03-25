@@ -42,6 +42,23 @@ struct jvalue *jobj_get(struct jvalue *value, const char *key) {
         return NULL;
     return pair->val;
 }
+struct jvalue *jobj_set(struct jvalue *obj, const char *key,struct jvalue *value) {
+    if (obj->type != JOBJECT)
+        return NULL;
+    // hm_set_ptr(obj->val.obj, hm_new(obj->val.obj, key), key, strlen(key));
+    struct key_pair *pair = hm_get(obj->val.obj, key);
+    // hm_set(obj->val.obj,hm_find(obj->val.obj, key),)
+    if (!pair) {
+        pair = malloc(sizeof(struct key_pair));
+        pair->val = value;
+        pair->key=key;
+        hm_set(obj->val.obj, NULL, pair);
+    } else {
+        free_object(pair->val);
+        pair->val=value;
+    }
+    return pair->val;
+}
 bool jobj_del(struct jvalue *value, const char *key) {
     if (!value)
         return false;
