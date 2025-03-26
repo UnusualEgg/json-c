@@ -79,7 +79,7 @@ struct jerr {
 };
 
 // functions
-#define print_jerr(err) print_jerr_str(err, (void *)0)
+#define jerr_print(err) print_jerr_str(err, (void *)0)
 // print error with original string buffer (usually file buffer) (char *str)
 void jerr_print_str(struct jerr *err, const char *str);
 const char *jtype_to_str(enum jtype type);
