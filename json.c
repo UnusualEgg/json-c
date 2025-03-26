@@ -1,6 +1,6 @@
 // debug print
 #ifndef dbp
-#define dbp 0
+#define dbp 1
 #endif
 
 #include "json.h"
@@ -599,7 +599,7 @@ array_err:
 void pair_printer(struct hashmap_node *node) {
     struct key_pair *pair = node->val;
     printf("{\"%s\":", pair->key);
-    printf("(%s)", type_to_str(pair->val->type));
+    printf("(%s)", jtype_to_str(pair->val->type));
     // print_object(pair->val);
     printf("}");
 }
@@ -886,7 +886,7 @@ bool serialize(const char *fn, struct jvalue *j) {
         return false;                                                                              \
     }
 
-void fprint_string(FILE *f, char *str) {
+void fprint_string(FILE *f, const char *str) {
     // https://stackoverflow.com/a/3201478
 
     size_t len = strlen(str);
@@ -987,7 +987,7 @@ char *wbuf(char *buf, size_t offset, size_t *buf_len, size_t data_len) {
     }
     return buf;
 }
-char *sprint_string(char *str, char *buf, size_t *offset, size_t *buf_len) {
+char *sprint_string(const char *str, char *buf, size_t *offset, size_t *buf_len) {
     // https://stackoverflow.com/a/3201478
 
     size_t len = strlen(str);
@@ -1052,7 +1052,6 @@ char *sprint_string(char *str, char *buf, size_t *offset, size_t *buf_len) {
     return buf;
 }
 char *sprint_value_normal(struct jvalue *j) { return sprint_value(j, NULL, NULL, NULL); }
-// offset can't be null and should be set to 0
 // on success wil return an allocated buffer(char* buf may be invalid(ralloc'd) at this point)
 // that isn't- guaranteed to have a null terminator offset will contain the new length on error
 // returns null, but offset will be amount of characters successful (and the buffer is freed)
@@ -1068,19 +1067,25 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
     assert(offset);
     if (!buf) {
         buf = JSON_MALLOC(8);
-        *buf_len = 8;
         if (!buf) {
             return NULL;
         }
+        *buf_len = 8;
     }
 
     char *s;
     size_t len;
     char num_buf[1024] = {0};
 
+#if dbp != 0
+    printf("sprint a %s aka %d %d\n", jtype_to_str(j->type), j->type, __LINE__);
+#endif
     switch (j->type) {
         case JSTR:
             s = j->val.str;
+#if dbp != 0
+            printf("buf_len:%zu %d\n", *buf_len, __LINE__);
+#endif
             // 2 extra char's
             buf = wbuf(buf, *offset, buf_len, 3);
             if (!buf) {
@@ -1088,9 +1093,19 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
             }
             // this is the first extra char
             buf[(*offset)++] = '"';
+#if dbp != 0
+            printf("buf_len:%zu %d\n", *buf_len, __LINE__);
+#endif
             buf = sprint_string(s, buf, offset, buf_len);
             if (!buf)
                 return NULL;
+            buf = wbuf(buf, *offset, buf_len, 2);
+            if (!buf) {
+                return NULL;
+            }
+#if dbp != 0
+            printf("buf_len:%zu %d\n", *buf_len, __LINE__);
+#endif
             // replace '\0' with "
             buf[(*offset)++] = '"';
             // this is the second extra char
@@ -1164,11 +1179,14 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
             struct hashmap_node *node = j->val.obj->nodes;
             while (node) {
                 struct key_pair *pair = node->val;
-                char *s = pair->key;
+                const char *s = pair->key;
                 buf = wbuf(buf, *offset, buf_len, 5); //+2 for ", " | +2 for ':', ' '
                 if (!buf) {
                     return NULL;
                 }
+#if dbp != 0
+                printf("buf_len:%zu %d\n", *buf_len, __LINE__);
+#endif
                 buf[(*offset)++] = '"';
                 buf = sprint_string(s, buf, offset, buf_len);
                 if (!buf)
@@ -1181,12 +1199,18 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
                 buf[(*offset)++] = ':';
                 buf[(*offset)++] = ' ';
                 buf[(*offset)] = '\0';
+#if dbp != 0
+                printf("buf_len:%zu %d\n", *buf_len, __LINE__);
+#endif
 
                 // print object
                 buf = sprint_value(pair->val, buf, offset, buf_len);
                 if (!buf) {
                     return NULL;
                 }
+#if dbp != 0
+                printf("buf_len:%zu %d\n", *buf_len, __LINE__);
+#endif
 
                 node = node->next;
                 if (node) {

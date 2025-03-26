@@ -79,9 +79,9 @@ struct jerr {
 };
 
 // functions
-#define jerr_print(err) print_jerr_str(err, (void *)0)
 // print error with original string buffer (usually file buffer) (char *str)
 void jerr_print_str(struct jerr *err, const char *str);
+#define jerr_print(err) jerr_print_str(err, (void *)0)
 const char *jtype_to_str(enum jtype type);
 // returns:a cloned allocated jvalue
 // everything is
@@ -129,6 +129,6 @@ bool fprint_value(FILE *f, struct jvalue *j);
 bool serialize(const char *fn, struct jvalue *j);
 // see json.c comments for details
 char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len);
-char *sprint_string(char *str, char *buf, size_t *offset, size_t *buf_len);
+char *sprint_string(const char *str, char *buf, size_t *offset, size_t *buf_len);
 // will return an allocated string
 char *sprint_value_normal(struct jvalue *j);
