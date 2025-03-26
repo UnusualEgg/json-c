@@ -175,7 +175,7 @@ void add_items(struct jvalue *curr, ITEM ***items_array, size_t *items_len, char
                 buf = realloc(buf, len + 1 + 8 + 1 + 1); //(type)\0
                 exit_null(buf, "malloc");
                 strcat(buf, "(");
-                strncat(buf, type_to_str(pair->val->type), 8);
+                strncat(buf, jtype_to_str(pair->val->type), 8);
                 strcat(buf, ")");
                 append_str(strings_array, strings_len, *item_i, buf);
                 strings = *strings_array;
@@ -250,9 +250,9 @@ void add_items(struct jvalue *curr, ITEM ***items_array, size_t *items_len, char
     (*items_array)[*item_i] = NULL;
 }
 
-void add_type(enum type type, ITEM ***items, size_t *items_len, char ***strings,
+void add_type(enum jtype type, ITEM ***items, size_t *items_len, char ***strings,
               size_t *strings_len, int *item_i) {
-    char *type_buf = strdup(type_to_str(type));
+    char *type_buf = strdup(jtype_to_str(type));
     exit_null(type_buf, "strdup");
     append_str(strings, strings_len, *item_i, type_buf);
     append_item(items, items_len, *item_i, new_item("type", (*strings)[*item_i]));
@@ -327,10 +327,10 @@ int main(int argc, char **argv) {
     if (!j) {
         endwin();
         if (err.errno_set) {
-            print_jerr_str(&err, buf);
+            jerr_print_str(&err, buf);
             perror("load_fn");
         } else {
-            print_jerr_str(&err, buf);
+            jerr_print_str(&err, buf);
         }
         free(buf);
         exit(EXIT_FAILURE);

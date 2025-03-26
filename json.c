@@ -42,7 +42,7 @@ struct jvalue *jobj_get(struct jvalue *value, const char *key) {
         return NULL;
     return pair->val;
 }
-struct jvalue *jobj_set(struct jvalue *obj, const char *key,struct jvalue *value) {
+struct jvalue *jobj_set(struct jvalue *obj, const char *key, struct jvalue *value) {
     if (obj->type != JOBJECT)
         return NULL;
     // hm_set_ptr(obj->val.obj, hm_new(obj->val.obj, key), key, strlen(key));
@@ -51,11 +51,11 @@ struct jvalue *jobj_set(struct jvalue *obj, const char *key,struct jvalue *value
     if (!pair) {
         pair = malloc(sizeof(struct key_pair));
         pair->val = value;
-        pair->key=key;
+        pair->key = key;
         hm_set(obj->val.obj, NULL, pair);
     } else {
         free_object(pair->val);
-        pair->val=value;
+        pair->val = value;
     }
     return pair->val;
 }
@@ -126,10 +126,6 @@ bool ws(char *str, size_t str_len, size_t *index, char *c, struct jerr *err) {
     return false;
 }
 
-void copy_to(struct jvalue *dest, struct jvalue *src) {
-    dest->type = src->type;
-    dest->val = src->val;
-}
 struct jvalue *jvalue_clone(struct jvalue *j) {
     struct jvalue *new = malloc(sizeof(struct jvalue));
     if (!new)
@@ -175,14 +171,14 @@ struct jvalue *jvalue_clone(struct jvalue *j) {
     return new;
 }
 size_t jerr_get_col(struct jerr *err) { return err->pos - err->last_nl; }
-void print_jerr_str(struct jerr *err, char *str) {
+void jerr_print_str(struct jerr *err, const char *str) {
     if (!err->iserr) {
         return;
     }
     size_t col = jerr_get_col(err);
     size_t start = err->last_nl + 1;
     // size_t col = err->pos - start - 1;
-    char *line_str = &str[start];
+    const char *line_str = &str[start];
     char *end = NULL;
     size_t len = 0;
     if (str) {
@@ -205,7 +201,7 @@ void print_jerr_str(struct jerr *err, char *str) {
 #endif
     fprintf(stderr, "%.*s\n%*c\n", (int)len, line_str, (int)col, '^');
     fprintf(stderr, "Error parsing %s | Position:%zu(line:%zu col:%zu) | Expected: ",
-            type_to_str(err->type), err->pos - err->last_nl, err->line, col);
+            jtype_to_str(err->type), err->pos - err->last_nl, err->line, col);
     // print each expectd
     for (int i = 0; i < 3; i++) {
         char c = err->expected[i];
@@ -221,7 +217,7 @@ void print_jerr_str(struct jerr *err, char *str) {
     }
 }
 
-const char *type_to_str(enum type type) {
+const char *jtype_to_str(enum jtype type) {
     switch (type) {
         case UNKNOWN:
             return "UNKNOWN";
@@ -243,7 +239,7 @@ const char *type_to_str(enum type type) {
 }
 
 // parse
-struct jvalue *parse_null(char *str, size_t str_len, size_t *index, struct jerr *err) {
+struct jvalue *jparse_null(char *str, size_t str_len, size_t *index, struct jerr *err) {
     if (*index + 3 >= str_len || str[(*index)] != 'n') {
         err->iserr = true;
         err->type = JNULL;
@@ -261,7 +257,7 @@ struct jvalue *parse_null(char *str, size_t str_len, size_t *index, struct jerr 
     (*index) += 4;
     return j;
 }
-struct jvalue *parse_bool(char *str, size_t str_len, size_t *index, struct jerr *err) {
+struct jvalue *jparse_bool(char *str, size_t str_len, size_t *index, struct jerr *err) {
     if (*index >= str_len) {
         goto bool_err;
     }
@@ -288,7 +284,7 @@ bool_err:
     err->pos = *index;
     return NULL;
 }
-struct jvalue *parse_number(char *str, size_t str_len, size_t *index, struct jerr *err) {
+struct jvalue *jparse_number(char *str, size_t str_len, size_t *index, struct jerr *err) {
     // init object
     struct jvalue *j = JSON_MALLOC(sizeof(struct jvalue));
     exit_malloc(JNUMBER);
@@ -347,7 +343,7 @@ number_err:
     free_object(j);
     return NULL;
 }
-struct jvalue *parse_string(char *str, size_t str_len, size_t *index, struct jerr *err) {
+struct jvalue *jparse_string(char *str, size_t str_len, size_t *index, struct jerr *err) {
     // init object
     struct jvalue *j = JSON_MALLOC(sizeof(struct jvalue));
     exit_malloc(JSTR);
@@ -498,7 +494,7 @@ string_err:
     return NULL;
 }
 
-struct jvalue *parse_array(char *str, size_t str_len, size_t *index, struct jerr *err) {
+struct jvalue *jparse_array(char *str, size_t str_len, size_t *index, struct jerr *err) {
     // init object
     struct jvalue *j = JSON_MALLOC(sizeof(struct jvalue));
     exit_malloc(JARRAY);
@@ -530,7 +526,7 @@ struct jvalue *parse_array(char *str, size_t str_len, size_t *index, struct jerr
 #endif
 
         // parse value
-        struct jvalue *element = parse_any(str, str_len, index, err);
+        struct jvalue *element = jparse_any(str, str_len, index, err);
         if (!element) {
             free_object(j);
             return NULL;
@@ -608,7 +604,7 @@ void pair_printer(struct hashmap_node *node) {
     printf("}");
 }
 #endif
-struct jvalue *parse_object(char *str, size_t str_len, size_t *index, struct jerr *err) {
+struct jvalue *jparse_object(char *str, size_t str_len, size_t *index, struct jerr *err) {
     // init object
     struct jvalue *j = JSON_MALLOC(sizeof(struct jvalue));
     exit_malloc(JOBJECT);
@@ -645,7 +641,7 @@ struct jvalue *parse_object(char *str, size_t str_len, size_t *index, struct jer
         fflush(stdout);
 #endif
         // parse key
-        struct jvalue *s = parse_string(str, str_len, index, err);
+        struct jvalue *s = jparse_string(str, str_len, index, err);
         if (!s) {
             free_object(j);
             return NULL;
@@ -691,7 +687,7 @@ struct jvalue *parse_object(char *str, size_t str_len, size_t *index, struct jer
         }
 
         // parse value
-        struct jvalue *child = parse_any(str, str_len, index, err);
+        struct jvalue *child = jparse_any(str, str_len, index, err);
         if (!child) {
             free(key);
             free_object(j);
@@ -741,7 +737,7 @@ object_err:
     return NULL;
 }
 
-enum type find_type(char *str, size_t str_len, size_t *index) {
+enum jtype jfind_type(char *str, size_t str_len, size_t *index) {
     if (*index >= str_len) {
         return UNKNOWN;
     }
@@ -771,20 +767,20 @@ enum type find_type(char *str, size_t str_len, size_t *index) {
     }
 }
 // parse any type
-struct jvalue *parse_any(char *str, size_t str_len, size_t *index, struct jerr *err) {
-    switch (find_type(str, str_len, index)) {
+struct jvalue *jparse_any(char *str, size_t str_len, size_t *index, struct jerr *err) {
+    switch (jfind_type(str, str_len, index)) {
         case JOBJECT:
-            return parse_object(str, str_len, index, err);
+            return jparse_object(str, str_len, index, err);
         case JSTR:
-            return parse_string(str, str_len, index, err);
+            return jparse_string(str, str_len, index, err);
         case JNUMBER:
-            return parse_number(str, str_len, index, err);
+            return jparse_number(str, str_len, index, err);
         case JARRAY:
-            return parse_array(str, str_len, index, err);
+            return jparse_array(str, str_len, index, err);
         case JBOOL:
-            return parse_bool(str, str_len, index, err);
+            return jparse_bool(str, str_len, index, err);
         case JNULL:
-            return parse_null(str, str_len, index, err);
+            return jparse_null(str, str_len, index, err);
         case UNKNOWN:
         default:
             err->iserr = true;
@@ -816,7 +812,7 @@ struct jvalue *load_file(FILE *f, char **str_buf, size_t *str_len, struct jerr *
     (*str_buf)[len] = '\0';
     size_t index = 0;
 
-    return parse_any(*str_buf, len, &index, err);
+    return jparse_any(*str_buf, len, &index, err);
 }
 // set errno
 struct jvalue *load_filename(const char *fn, char **str_buf, size_t *str_len, struct jerr *err) {

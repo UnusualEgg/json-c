@@ -17,10 +17,10 @@ int main(int argc, char **argv) {
     struct jvalue *j = load_filename(argv[1], &buf, &len, &err);
     if (!j) {
         if (err.errno_set) {
-            print_jerr_str(&err, buf);
+            jerr_print_str(&err, buf);
             perror("load_fn");
         } else {
-            print_jerr_str(&err, buf);
+            jerr_print_str(&err, buf);
         }
         free(buf);
         exit(EXIT_FAILURE);

@@ -17,10 +17,10 @@ int main(int argc, char **argv) {
     free(buf);
     if (!j) {
         if (err.errno_set) {
-            print_jerr(&err);
+            jerr_print(&err);
             perror("load_fn");
         } else {
-            print_jerr(&err);
+            jerr_print(&err);
         }
         exit(EXIT_FAILURE);
     }

@@ -24,7 +24,7 @@
 //- VALUE->VAL (ALWAYS)
 
 // types
-enum type { UNKNOWN = 0, JOBJECT, JSTR, JNUMBER, JBOOL, JNULL, JARRAY };
+enum jtype { UNKNOWN = 0, JOBJECT, JSTR, JNUMBER, JBOOL, JNULL, JARRAY };
 // underlying structs
 //(attribute with same name is abbr.
 struct number {
@@ -51,7 +51,7 @@ typedef struct array jarray;
 // so you can pass it between functions
 // instead of the individual types
 struct jvalue {
-    enum type type;
+    enum jtype type;
     union {
         jobj obj;
         jstr str;
@@ -70,7 +70,7 @@ struct key_pair {
 struct jerr {
     bool iserr;
     bool errno_set;
-    enum type type; // when parsing this type
+    enum jtype type; // when parsing this type
     size_t pos;
     char expected[3]; // max number of different expected chars
     char got;
@@ -79,18 +79,20 @@ struct jerr {
 };
 
 // functions
-void print_jerr(struct jerr *err);
 #define print_jerr(err) print_jerr_str(err, (void *)0)
-void print_jerr_str(struct jerr *err, char *str);
-const char *type_to_str(enum type type);
-void copy_to(struct jvalue *dest, struct jvalue *src);
+// print error with original string buffer (usually file buffer) (char *str)
+void jerr_print_str(struct jerr *err, const char *str);
+const char *jtype_to_str(enum jtype type);
+// returns:a cloned allocated jvalue
+// everything is
 struct jvalue *jvalue_clone(struct jvalue *j);
 // manipulation
 struct jvalue *jobj_get(struct jvalue *value, const char *key);
 // returns true if found and deleted
 bool jobj_del(struct jvalue *value, const char *key);
 char *jstr_get(struct jvalue *value);
-struct jvalue *jobj_set(struct jvalue *obj, const char *key,struct jvalue *value);
+// doesn't allocate
+struct jvalue *jobj_set(struct jvalue *obj, const char *key, struct jvalue *value);
 struct jvalue *jarray_get(struct jvalue *value, size_t index);
 const size_t *jarray_len(struct jvalue *value);
 
@@ -100,16 +102,17 @@ const size_t *jarray_len(struct jvalue *value);
 // index is for keeping positon in the string str
 // err will be set in case of an error
 // all params are in and out params
-struct jvalue *parse_any(char *str, size_t str_len, size_t *index, struct jerr *err);
-struct jvalue *parse_null(char *str, size_t str_len, size_t *index, struct jerr *err);
-struct jvalue *parse_bool(char *str, size_t str_len, size_t *index, struct jerr *err);
-struct jvalue *parse_number(char *str, size_t str_len, size_t *index, struct jerr *err);
-struct jvalue *parse_string(char *str, size_t str_len, size_t *index, struct jerr *err);
-struct jvalue *parse_array(char *str, size_t str_len, size_t *index, struct jerr *err);
-struct jvalue *parse_object(char *str, size_t str_len, size_t *index, struct jerr *err);
+struct jvalue *jparse_any(char *str, size_t str_len, size_t *index, struct jerr *err);
+struct jvalue *jparse_null(char *str, size_t str_len, size_t *index, struct jerr *err);
+struct jvalue *jparse_bool(char *str, size_t str_len, size_t *index, struct jerr *err);
+struct jvalue *jparse_number(char *str, size_t str_len, size_t *index, struct jerr *err);
+struct jvalue *jparse_string(char *str, size_t str_len, size_t *index, struct jerr *err);
+struct jvalue *jparse_array(char *str, size_t str_len, size_t *index, struct jerr *err);
+struct jvalue *jparse_object(char *str, size_t str_len, size_t *index, struct jerr *err);
 
-// may return UNKNOWN
-enum type find_type(char *str, size_t str_len, size_t *index);
+// figures out the type based on the begining characters in str
+//  may return UNKNOWN
+enum jtype jfind_type(char *str, size_t str_len, size_t *index);
 
 // load file
 // only keep str for errors... and for users
