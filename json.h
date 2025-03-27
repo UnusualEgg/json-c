@@ -63,7 +63,8 @@ struct jvalue {
 };
 // so we have the (unhashed) key string
 struct key_pair {
-    const char *key;
+    // not const because it's owned
+    char *key;
     struct jvalue *val;
 };
 // errors

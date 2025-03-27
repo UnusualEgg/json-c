@@ -60,7 +60,7 @@ struct jvalue *jobj_set(struct jvalue *obj, const char *key, struct jvalue *valu
     if (!pair) {
         pair = malloc(sizeof(struct key_pair));
         pair->val = value;
-        pair->key = key;
+        pair->key = strdup(key);
         printf("hm_set %s:%p\n", key, (void *)value);
         print_value(value);
         printf("|value\n");
