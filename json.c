@@ -55,13 +55,13 @@ struct jvalue *jobj_set(struct jvalue *obj, const char *key, struct jvalue *valu
         return NULL;
     // hm_set_ptr(obj->val.obj, hm_new(obj->val.obj, key), key, strlen(key));
     struct key_pair *pair = hm_get(obj->val.obj, key);
-    printf("pair: %p\n",(void*)pair);
+    printf("pair: %p\n", (void *)pair);
     // hm_set(obj->val.obj,hm_find(obj->val.obj, key),)
     if (!pair) {
         pair = malloc(sizeof(struct key_pair));
         pair->val = value;
         pair->key = key;
-        printf("hm_set %s:%p\n",key,(void*)value);
+        printf("hm_set %s:%p\n", key, (void *)value);
         print_value(value);
         printf("|value\n");
         hm_debugx(obj->val.obj, pair_printer);
@@ -141,6 +141,13 @@ bool ws(char *str, size_t str_len, size_t *index, char *c, struct jerr *err) {
     return false;
 }
 
+static struct key_pair *clone_pair_cb(struct key_pair *pair) {
+    struct key_pair *new_pair = JSON_MALLOC(sizeof(struct key_pair));
+    new_pair->key = strdup(pair->key);
+    new_pair->val = jvalue_clone(pair->val);
+    return new_pair;
+}
+
 struct jvalue *jvalue_clone(struct jvalue *j) {
     struct jvalue *new = malloc(sizeof(struct jvalue));
     if (!new)
@@ -171,8 +178,8 @@ struct jvalue *jvalue_clone(struct jvalue *j) {
         case JOBJECT: {
             // copies the struct key_pair's
             // also includes ptr to old jvalue(pair->val)
-            //TODO give it a duplicate fn bc it won't duplicate strings right i think
-            new->val.obj = hm_clone(j->val.obj);
+            // TODO give it a duplicate fn bc it won't duplicate strings right i think
+            new->val.obj = hm_clone(j->val.obj, (hm_clone_val_fn)clone_pair_cb);
             jobj new_obj = new->val.obj;
             for (size_t i = 0; i < j->val.obj->len; i++) {
                 struct key_pair *pair = j->val.obj->nodes[i].val;
@@ -1085,7 +1092,7 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
     char num_buf[1024] = {0};
 
 #if dbp != 0
-    printf("j:%p\n",(void*)j);
+    printf("j:%p\n", (void *)j);
     printf("sprint a %s aka %d %d\n", jtype_to_str(j->type), j->type, __LINE__);
 #endif
     switch (j->type) {
@@ -1209,7 +1216,7 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
                 buf[(*offset)] = '\0';
 #if dbp != 0
                 printf("buf_len:%zu %d\n", *buf_len, __LINE__);
-                printf("pair->val:%p\n",(void*)pair->val);
+                printf("pair->val:%p\n", (void *)pair->val);
 #endif
 
                 // print object
