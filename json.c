@@ -41,6 +41,20 @@ void pair_printer(struct hashmap_node *node) {
     printf("}");
 }
 #endif
+static void free_pair(void *ptr) {
+    struct key_pair *pair = ptr;
+    // the string key
+    JSON_FREE(pair->key);
+    free_object(pair->val);
+    JSON_FREE(pair);
+}
+
+struct jvalue *jstr_new(char *str) {
+    struct jvalue *j = malloc(sizeof(struct jvalue));
+    j->type = JSTR;
+    j->val.str = str;
+    return j;
+}
 // manipulation
 struct jvalue *jobj_get(struct jvalue *value, const char *key) {
     if (value->type != JOBJECT)
@@ -624,6 +638,7 @@ struct jvalue *jparse_object(char *str, size_t str_len, size_t *index, struct je
         err->errno_set = true;
         goto object_err;
     }
+    hm->free_fn = free_pair;
     // we at {
     if (*index >= str_len || str[*index] != '{') {
         err->expected[0] = '{';
@@ -702,16 +717,16 @@ struct jvalue *jparse_object(char *str, size_t str_len, size_t *index, struct je
             free_object(j);
             return NULL;
         }
-        struct key_pair *pair = JSON_MALLOC(sizeof(struct key_pair));
-        pair->key = key;
-        pair->val = child;
+        struct key_pair pair = (struct key_pair){key, child};
+        // pair->key = key;
+        // pair->val = child;
 #if dbp != 0
         printf("hm_setx(\"%s\",", key);
         print_value(child);
         printf(")\n");
         hm_debugx(hm, pair_printer);
 #endif
-        hm_setx(hm, hm_hash(hm, key), pair, sizeof(struct key_pair));
+        hm_setx(hm, hm_hash(hm, key), &pair, sizeof(struct key_pair));
 #if dbp != 0
         hm_debugx(hm, pair_printer);
         printf("parsed value\n");
@@ -847,19 +862,7 @@ struct jvalue *load_filename(const char *fn, char **str_buf, size_t *str_len, st
 // frees j and its value(s) recursively
 void free_object(struct jvalue *j) {
     switch (j->type) {
-        case JOBJECT:;
-            // free every value
-            struct hashmap_node *node = j->val.obj->nodes;
-            while (node) {
-                // each node is a key-value pair. the key ptr and value ptr need to be
-                // freed
-                struct key_pair *pair = (node->val);
-                // the STRING key
-                JSON_FREE(pair->key);
-                free_object(pair->val);
-                node = node->next;
-            }
-            // after that, the key-value pair structs themselves are freed
+        case JOBJECT:
             hm_free(j->val.obj);
             break;
         case JARRAY:

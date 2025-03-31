@@ -80,6 +80,8 @@ struct jerr {
 };
 
 // functions
+// new
+struct jvalue *jstr_new(char *str);
 // print error with original string buffer (usually file buffer) (char *str)
 void jerr_print_str(struct jerr *err, const char *str);
 #define jerr_print(err) jerr_print_str(err, (void *)0)
