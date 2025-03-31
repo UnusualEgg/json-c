@@ -18,6 +18,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+
 // abbreviated:
 //- STRING->STR (except parse_string)
 //- BOOLEAN->BOOL (except jobject.val.boolean)
@@ -81,7 +82,14 @@ struct jerr {
 
 // functions
 // new
+struct jvalue *jbool_new(bool b);
+struct jvalue *jnull_new(void);
+struct jvalue *jnum_new(double d);
+struct jvalue *jnum_new_d(long long l);
 struct jvalue *jstr_new(char *str);
+struct jvalue *jobj_new(void);
+struct jvalue *jarray_new(void);
+
 // print error with original string buffer (usually file buffer) (char *str)
 void jerr_print_str(struct jerr *err, const char *str);
 #define jerr_print(err) jerr_print_str(err, (void *)0)
@@ -119,19 +127,24 @@ enum jtype jfind_type(char *str, size_t str_len, size_t *index);
 
 // load file
 // only keep str for errors... and for users
-struct jvalue *load_file(FILE *f, char **str_buf, size_t *str_len, struct jerr *err);
+struct jvalue *json_load_file(FILE *f, char **str_buf, size_t *str_len, struct jerr *err);
 // set errno
-struct jvalue *load_filename(const char *fn, char **str_buf, size_t *str_len, struct jerr *err);
+struct jvalue *json_load_filename(const char *fn, char **str_buf, size_t *str_len, struct jerr *err);
+
+// store file
+// true if error
+bool json_store_filename(const char *fn, struct jvalue* j);
+
 // unload
-void free_object(struct jvalue *j);
+void jvalue_free(struct jvalue *j);
 
 // output object
-void print_value(struct jvalue *j);
+void jvalue_print(struct jvalue *j);
 // true if error
-bool fprint_value(FILE *f, struct jvalue *j);
-bool serialize(const char *fn, struct jvalue *j);
+bool jvalue_fprint(FILE *f, struct jvalue *j);
+bool jvalue_serialize(const char *fn, struct jvalue *j);
 // see json.c comments for details
-char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len);
-char *sprint_string(const char *str, char *buf, size_t *offset, size_t *buf_len);
+char *jvalue_sprint(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len);
+char *json_sprint_string(const char *str, char *buf, size_t *offset, size_t *buf_len);
 // will return an allocated string
-char *sprint_value_normal(struct jvalue *j);
+char *json_sprint_value_alloc(struct jvalue *j);

@@ -1,4 +1,5 @@
 // debug print
+#include <stdbool.h>
 #ifndef dbp
 #define dbp 0
 #endif
@@ -16,12 +17,12 @@
 // eh it works
 #define exit_null(j, v, n)                                                                         \
     if (!v) {                                                                                      \
-        free_object(j);                                                                            \
+        jvalue_free(j);                                                                            \
         return NULL;                                                                               \
     }
 #define exit_v(j, v, e, n)                                                                         \
     if (v == e) {                                                                                  \
-        free_object(j);                                                                            \
+        jvalue_free(j);                                                                            \
         return NULL;                                                                               \
     }
 #define exit_malloc(type_t)                                                                        \
@@ -45,14 +46,52 @@ static void free_pair(void *ptr) {
     struct key_pair *pair = ptr;
     // the string key
     JSON_FREE(pair->key);
-    free_object(pair->val);
+    jvalue_free(pair->val);
     JSON_FREE(pair);
 }
-
+struct jvalue *jbool_new(bool b) {
+    struct jvalue *j = malloc(sizeof(struct jvalue));
+    j->type = JBOOL;
+    j->val.boolean = b;
+    return j;
+}
+struct jvalue *jnull_new(void) {
+    struct jvalue *j = malloc(sizeof(struct jvalue));
+    j->type = JNULL;
+    return j;
+}
+struct jvalue *jnum_new(double d) {
+    struct jvalue *j = malloc(sizeof(struct jvalue));
+    j->type = JNUMBER;
+    j->val.number.islong = false;
+    j->val.number.num.d = d;
+    return j;
+}
+struct jvalue *jnum_new_d(long long l) {
+    struct jvalue *j = malloc(sizeof(struct jvalue));
+    j->type = JNUMBER;
+    j->val.number.islong = true;
+    j->val.number.num.l = l;
+    return j;
+}
 struct jvalue *jstr_new(char *str) {
     struct jvalue *j = malloc(sizeof(struct jvalue));
     j->type = JSTR;
     j->val.str = str;
+    return j;
+}
+struct jvalue *jobj_new(void) {
+    struct jvalue *j = malloc(sizeof(struct jvalue));
+    j->type = JOBJECT;
+    j->val.obj = hm_create();
+    j->val.obj->free_fn = free_pair;
+    return j;
+}
+struct jvalue *jarray_new(void) {
+    struct jvalue *j = malloc(sizeof(struct jvalue));
+    j->type = JARRAY;
+    j->val.array.arr = NULL;
+    j->val.array.len = 0;
     return j;
 }
 // manipulation
@@ -75,10 +114,10 @@ struct jvalue *jobj_set(struct jvalue *obj, const char *key, struct jvalue *valu
         pair = malloc(pair_size);
         pair->val = value;
         pair->key = strdup(key);
-        print_value(value);
+        jvalue_print(value);
         hm_setx(obj->val.obj, NULL, pair, pair_size);
     } else {
-        free_object(pair->val);
+        jvalue_free(pair->val);
         pair->val = value;
     }
     return pair->val;
@@ -372,7 +411,7 @@ number_err:
     err->iserr = true;
     err->type = JNUMBER;
     err->pos = *index;
-    free_object(j);
+    jvalue_free(j);
     return NULL;
 }
 struct jvalue *jparse_string(char *str, size_t str_len, size_t *index, struct jerr *err) {
@@ -516,7 +555,7 @@ string_err:
     }
     // only free inner string if we have it
     if (j->val.str) {
-        free_object(j);
+        jvalue_free(j);
     } else {
         free(j);
     }
@@ -560,7 +599,7 @@ struct jvalue *jparse_array(char *str, size_t str_len, size_t *index, struct jer
         // parse value
         struct jvalue *element = jparse_any(str, str_len, index, err);
         if (!element) {
-            free_object(j);
+            jvalue_free(j);
             return NULL;
         }
         (*len)++;
@@ -618,7 +657,7 @@ struct jvalue *jparse_array(char *str, size_t str_len, size_t *index, struct jer
     (*index)++;
     return j;
 array_err:
-    free_object(j);
+    jvalue_free(j);
     err->iserr = true;
     err->type = JARRAY;
     err->pos = *index;
@@ -667,11 +706,11 @@ struct jvalue *jparse_object(char *str, size_t str_len, size_t *index, struct je
         // parse key
         struct jvalue *s = jparse_string(str, str_len, index, err);
         if (!s) {
-            free_object(j);
+            jvalue_free(j);
             return NULL;
         } // err already set
         if (s->type != JSTR) {
-            free_object(s);
+            jvalue_free(s);
             err->expected[0] = '"';
             goto object_err;
         }
@@ -714,7 +753,7 @@ struct jvalue *jparse_object(char *str, size_t str_len, size_t *index, struct je
         struct jvalue *child = jparse_any(str, str_len, index, err);
         if (!child) {
             free(key);
-            free_object(j);
+            jvalue_free(j);
             return NULL;
         }
         struct key_pair pair = (struct key_pair){key, child};
@@ -754,7 +793,7 @@ struct jvalue *jparse_object(char *str, size_t str_len, size_t *index, struct je
     (*index)++;
     return j;
 object_err:
-    free_object(j);
+    jvalue_free(j);
     err->iserr = true;
     err->type = JOBJECT;
     err->pos = *index;
@@ -842,7 +881,7 @@ struct jvalue *load_file(FILE *f, char **str_buf, size_t *str_len, struct jerr *
     return jparse_any(*str_buf, len, &index, err);
 }
 // set errno
-struct jvalue *load_filename(const char *fn, char **str_buf, size_t *str_len, struct jerr *err) {
+struct jvalue *json_load_filename(const char *fn, char **str_buf, size_t *str_len, struct jerr *err) {
     FILE *f = fopen(fn, "r");
     if (!f) {
         err->iserr = true;
@@ -853,14 +892,30 @@ struct jvalue *load_filename(const char *fn, char **str_buf, size_t *str_len, st
     struct jvalue *result = load_file(f, str_buf, str_len, err);
 
     if (fclose(f) == EOF) {
-        free_object(result);
+        jvalue_free(result);
         return NULL;
     }
     return result;
 }
+// true if error
+bool json_store_filename(const char *fn, struct jvalue* j) {
+    FILE *f = fopen(fn, "r");
+    if (!f) {
+        return true;
+    }
+
+    if (jvalue_fprint(f, j)) {
+        return true;
+    }
+
+    if (fclose(f) == EOF) {
+        return true;
+    }
+    return false;
+}
 
 // frees j and its value(s) recursively
-void free_object(struct jvalue *j) {
+void jvalue_free(struct jvalue *j) {
     switch (j->type) {
         case JOBJECT:
             hm_free(j->val.obj);
@@ -868,7 +923,7 @@ void free_object(struct jvalue *j) {
         case JARRAY:
             // free each object
             for (size_t i = 0; i < (j->val.array.len); i++) {
-                free_object(j->val.array.arr[i]);
+                jvalue_free(j->val.array.arr[i]);
             }
             // free vec
             JSON_FREE(j->val.array.arr);
@@ -885,17 +940,7 @@ void free_object(struct jvalue *j) {
     }
     JSON_FREE(j);
 }
-void print_value(struct jvalue *j) { fprint_value(stdout, j); }
-// true if success
-bool serialize(const char *fn, struct jvalue *j) {
-    FILE *f = fopen(fn, "w");
-    if (!f) {
-        return false;
-    }
-    fprint_value(f, j);
-    fclose(f);
-    return true;
-}
+void jvalue_print(struct jvalue *j) { jvalue_fprint(stdout, j); }
 #define exit_neg(v, msg)                                                                           \
     if (v < 0) {                                                                                   \
         return false;                                                                              \
@@ -1002,7 +1047,7 @@ char *wbuf(char *buf, size_t offset, size_t *buf_len, size_t data_len) {
     }
     return buf;
 }
-char *sprint_string(const char *str, char *buf, size_t *offset, size_t *buf_len) {
+char *json_sprint_string(const char *str, char *buf, size_t *offset, size_t *buf_len) {
     // https://stackoverflow.com/a/3201478
 
     size_t len = strlen(str);
@@ -1066,11 +1111,11 @@ char *sprint_string(const char *str, char *buf, size_t *offset, size_t *buf_len)
     buf[*offset] = '\0';
     return buf;
 }
-char *sprint_value_normal(struct jvalue *j) { return sprint_value(j, NULL, NULL, NULL); }
+char *jvalue_sprint_alloc(struct jvalue *j) { return jvalue_sprint(j, NULL, NULL, NULL); }
 // on success wil return an allocated buffer(char* buf may be invalid(ralloc'd) at this point)
 // that isn't- guaranteed to have a null terminator offset will contain the new length on error
 // returns null, but offset will be amount of characters successful (and the buffer is freed)
-char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len) {
+char *jvalue_sprint(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len) {
     size_t offset_temp = 0;
     size_t buf_len_temp = 0;
     if (!offset) {
@@ -1112,7 +1157,7 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
 #if dbp != 0
             printf("buf_len:%zu %d\n", *buf_len, __LINE__);
 #endif
-            buf = sprint_string(s, buf, offset, buf_len);
+            buf = json_sprint_string(s, buf, offset, buf_len);
             if (!buf)
                 return NULL;
             buf = wbuf(buf, *offset, buf_len, 2);
@@ -1204,7 +1249,7 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
                 printf("buf_len:%zu %d\n", *buf_len, __LINE__);
 #endif
                 buf[(*offset)++] = '"';
-                buf = sprint_string(s, buf, offset, buf_len);
+                buf = json_sprint_string(s, buf, offset, buf_len);
                 if (!buf)
                     return NULL;
                 buf = wbuf(buf, *offset, buf_len, 4);
@@ -1221,7 +1266,7 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
 #endif
 
                 // print object
-                buf = sprint_value(pair->val, buf, offset, buf_len);
+                buf = jvalue_sprint(pair->val, buf, offset, buf_len);
                 if (!buf) {
                     return NULL;
                 }
@@ -1259,7 +1304,7 @@ char *sprint_value(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len)
             buf[(*offset)] = '\0';
             struct array array = j->val.array;
             for (size_t i = 0; i < array.len; i++) {
-                buf = sprint_value(array.arr[i], buf, offset, buf_len);
+                buf = jvalue_sprint(array.arr[i], buf, offset, buf_len);
                 if (!buf) {
                     return NULL;
                 }
