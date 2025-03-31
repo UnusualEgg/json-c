@@ -55,19 +55,14 @@ struct jvalue *jobj_set(struct jvalue *obj, const char *key, struct jvalue *valu
         return NULL;
     // hm_set_ptr(obj->val.obj, hm_new(obj->val.obj, key), key, strlen(key));
     struct key_pair *pair = hm_get(obj->val.obj, key);
-    printf("pair: %p\n", (void *)pair);
     // hm_set(obj->val.obj,hm_find(obj->val.obj, key),)
     if (!pair) {
-        pair = malloc(sizeof(struct key_pair));
+        const size_t pair_size = sizeof(struct key_pair);
+        pair = malloc(pair_size);
         pair->val = value;
         pair->key = strdup(key);
-        printf("hm_set %s:%p\n", key, (void *)value);
         print_value(value);
-        printf("|value\n");
-        hm_debugx(obj->val.obj, pair_printer);
-        hm_set(obj->val.obj, NULL, pair);
-        hm_debugx(obj->val.obj, pair_printer);
-        printf("end hm_set\n");
+        hm_setx(obj->val.obj, NULL, pair, pair_size);
     } else {
         free_object(pair->val);
         pair->val = value;
@@ -134,7 +129,7 @@ bool ws(char *str, size_t str_len, size_t *index, char *c, struct jerr *err) {
         }
     } while (isspace(*c));
     (*index)--;
-#if dbp
+#if dbp != 0
     printf("ws end at %zu\n", *index);
 #endif
     // now c==[*index]
@@ -636,7 +631,7 @@ struct jvalue *jparse_object(char *str, size_t str_len, size_t *index, struct je
     }
     char c = str[(*index)]; //;'{'
 //{ ""
-#if dbp
+#if dbp != 0
     printf("parse object %c\n", c);
 #endif
     while (c != '}') {
@@ -650,7 +645,7 @@ struct jvalue *jparse_object(char *str, size_t str_len, size_t *index, struct je
         if (c == '}') {
             break;
         }
-#if dbp
+#if dbp != 0
         printf("begin of key: %c\n", c);
         fflush(stdout);
 #endif
@@ -688,7 +683,7 @@ struct jvalue *jparse_object(char *str, size_t str_len, size_t *index, struct je
             free(key);
             goto object_err;
         }
-#if dbp
+#if dbp != 0
         printf("after key: %c\n", c);
         fflush(stdout);
 #endif
@@ -707,21 +702,24 @@ struct jvalue *jparse_object(char *str, size_t str_len, size_t *index, struct je
             free_object(j);
             return NULL;
         }
-        struct key_pair pair = {key, child};
-#if dbp
+        struct key_pair *pair = JSON_MALLOC(sizeof(struct key_pair));
+        pair->key = key;
+        pair->val = child;
+#if dbp != 0
         printf("hm_setx(\"%s\",", key);
         print_value(child);
         printf(")\n");
+        hm_debugx(hm, pair_printer);
 #endif
-        hm_setx(hm, hm_hash(hm, key), &pair, sizeof(pair));
-#if dbp
+        hm_setx(hm, hm_hash(hm, key), pair, sizeof(struct key_pair));
+#if dbp != 0
         hm_debugx(hm, pair_printer);
         printf("parsed value\n");
 #endif
 
         // go up to comma or }
         if (ws(str, str_len, index, &c, err)) {
-#if dbp
+#if dbp != 0
             printf("ws EOF\n");
 #endif
             err->expected[0] = '}';
@@ -733,7 +731,7 @@ struct jvalue *jparse_object(char *str, size_t str_len, size_t *index, struct je
             err->expected[1] = ',';
             goto object_err;
         }
-#if dbp
+#if dbp != 0
         printf("obj: %c/%d\n", c, c);
         fflush(stdout);
 #endif
