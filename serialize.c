@@ -13,7 +13,7 @@ int main(int argc, char **argv) {
     char *buf = NULL;
     size_t len = 0;
     struct jerr err = {0};
-    struct jvalue *j = load_filename(argv[1], &buf, &len, &err);
+    struct jvalue *j = json_load_filename(argv[1], &buf, &len, &err);
     free(buf);
     if (!j) {
         if (err.errno_set) {
@@ -24,8 +24,8 @@ int main(int argc, char **argv) {
         }
         exit(EXIT_FAILURE);
     }
-    serialize(argv[2], j);
-    free_object(j);
+    jvalue_store_filename(argv[2], j);
+    jvalue_free(j);
 
     return 0;
 }

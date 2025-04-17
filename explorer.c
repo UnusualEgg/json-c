@@ -1,4 +1,5 @@
 #include "json.h"
+#include <curses.h>
 #include <errno.h>
 #include <menu.h>
 #include <ncurses.h>
@@ -58,7 +59,8 @@ void *err_ptr(void *v, const char *msg) {
 // doesn't inc item_i
 ITEM *append_item(ITEM ***items, size_t *items_len, int item_i, ITEM *val) {
     if (((size_t)item_i) + 1 >= *items_len) {
-        ITEM **new = realloc(*items, (item_i + 2) * sizeof(ITEM *));
+        //len is last index + 1
+        ITEM **new = realloc(*items, (item_i+2) * sizeof(ITEM *));
         exit_null(new, "realloc");
         *items = new;
 
@@ -77,7 +79,7 @@ ITEM *append_item(ITEM ***items, size_t *items_len, int item_i, ITEM *val) {
 // doesn't inc item_i
 char *append_str(char ***strings, size_t *strings_len, int item_i, char *val) {
     if ((size_t)item_i >= *strings_len) {
-        char **new = realloc(*strings, (item_i + 2) * sizeof(char *));
+        char **new = realloc(*strings, (*strings_len+1) * sizeof(char *));
         exit_null(new, "realloc");
 
         new[item_i] = val;
@@ -123,7 +125,7 @@ void add_items(struct jvalue *curr, ITEM ***items_array, size_t *items_len, char
             }
             buf = malloc(buf_len);
             exit_null(buf, "malloc");
-            buf = sprint_value(curr, buf, NULL, &buf_len);
+            buf = jvalue_sprint(curr, buf, NULL, &buf_len);
             exit_null(buf, "sprint_value");
             append_str(strings_array, strings_len, *item_i, buf);
             strings = *strings_array;
@@ -141,7 +143,7 @@ void add_items(struct jvalue *curr, ITEM ***items_array, size_t *items_len, char
             size_t offset = 0;
             buf = malloc(buf_len);
             exit_null(buf, "malloc");
-            buf = exit_null(sprint_value(curr, buf, &offset, &buf_len), "sprint_object");
+            buf = exit_null(jvalue_sprint(curr, buf, &offset, &buf_len), "sprint_object");
             // exit_null((buf[0]),"buf[0]");
             buf[buf_len - 1] = 0;
             // debug
@@ -169,7 +171,7 @@ void add_items(struct jvalue *curr, ITEM ***items_array, size_t *items_len, char
                 }
                 size_t str_buf_len = 0;
                 struct jvalue key = {.type = JSTR, .val = {.str = pair->key}};
-                char *buf = sprint_value(&key, NULL, NULL, &str_buf_len);
+                char *buf = jvalue_sprint(&key, NULL, NULL, &str_buf_len);
                 exit_null(buf, "sprint_value");
                 size_t len = str_buf_len;
                 buf = realloc(buf, len + 1 + 8 + 1 + 1); //(type)\0
@@ -212,7 +214,7 @@ void add_items(struct jvalue *curr, ITEM ***items_array, size_t *items_len, char
                     case JSTR:;
                         char *str_buf = malloc(buf_len);
                         exit_null(str_buf, "malloc");
-                        str_buf = sprint_value(arr.arr[i], str_buf, NULL, &buf_len);
+                        str_buf = jvalue_sprint(arr.arr[i], str_buf, NULL, &buf_len);
                         exit_null(buf, "sprint_value");
                         size_t len = strlen(str_buf);
                         if (len < (size_t)COLS - 4) {
@@ -231,7 +233,7 @@ void add_items(struct jvalue *curr, ITEM ***items_array, size_t *items_len, char
                         size_t buf_len = COLS;
                         char *buf_str = malloc(buf_len);
                         exit_null(buf_str, "malloc");
-                        buf_str = exit_null(sprint_value(arr.arr[i], buf_str, &offset, &buf_len),
+                        buf_str = exit_null(jvalue_sprint(arr.arr[i], buf_str, &offset, &buf_len),
                                             "sprint_object");
                         snprintf(buf, COLS - 1, "%u: %s", i, buf_str);
                         free(buf_str);
@@ -246,7 +248,8 @@ void add_items(struct jvalue *curr, ITEM ***items_array, size_t *items_len, char
             }
             break;
     }
-    strings[*item_i] = NULL;
+    //do we need this?
+    //strings[*item_i] = NULL;
     (*items_array)[*item_i] = NULL;
 }
 
@@ -278,7 +281,7 @@ struct jvalue *append_level(struct jvalue ***levels, size_t *levels_len, int *le
         buf = realloc(*levels, (*level + 1) * sizeof(struct jvalue *));
         exit_null(buf, "realloc");
         *levels = buf;
-        *levels_len = ((size_t)*levels) + 1;
+        *levels_len = ((size_t)*level) + 1;
     }
     buf[*level] = val;
     (*level)++;
@@ -292,6 +295,8 @@ void redraw(WINDOW *wm, MENU *m, struct jvalue *curr, int *item_i, ITEM ***items
     ITEM **empty = {NULL};
     err_menu(set_menu_items(m, empty), "set_menu_items(empty)");
     free_items(*items, *items_len, *strings, *strings_len, item_i);
+    *items_len=0;
+    *strings_len=0;
     // reprint the menu
     if (level > 0) {
         add_back(items, items_len, strings, strings_len, item_i);
@@ -313,7 +318,7 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
     // start curses mode
-    initscr();
+    WINDOW* main_window = initscr();
     atexit(handler);
 
     printw("Loading file");
@@ -323,7 +328,7 @@ int main(int argc, char **argv) {
     char *buf = NULL;
     size_t len = 0;
     struct jerr err = {0};
-    struct jvalue *j = load_filename(argv[1], &buf, &len, &err);
+    struct jvalue *j = json_load_filename(argv[1], &buf, &len, &err);
     if (!j) {
         endwin();
         if (err.errno_set) {
@@ -371,7 +376,7 @@ int main(int argc, char **argv) {
     err_menu(set_menu_sub(m, derwin(wm, lines - 1, cols - 2, 1, 1)), "set_menu_sub");
     // TODO figure out why only liek 15 items show up at a time
     // then it srolls
-    set_menu_format(m, lines - 2, COLS);
+    //set_menu_format(m, lines - 2, COLS);
 
     mvprintw(0, 0, "Json Explorer");
     box(wm, 0, 0);
@@ -422,6 +427,7 @@ int main(int argc, char **argv) {
                     exit(EXIT_FAILURE);
                 }
 
+                //offset inxex for easier procossing
                 // make back button -1
                 // and type 0
                 if (level > 0) {
@@ -431,7 +437,7 @@ int main(int argc, char **argv) {
                     break;
                 } // type
 
-                if (index == -1 && level > 0) {
+                if (index == -1) {
                     // debug
                     // if (level==0) {fprintf(stderr,"hit back at level 0\n");break;}
                     levels[level--] = NULL;
@@ -477,10 +483,12 @@ int main(int argc, char **argv) {
     free_items(items, items_len, strings, strings_len, &item_i);
 
     free(levels);
-    free_object(j);
+    jvalue_free(j);
 
     free(items);
     free(strings);
+
+    delwin(main_window);
 
     // end curses mode
     // endwin();

@@ -898,7 +898,7 @@ struct jvalue *json_load_filename(const char *fn, char **str_buf, size_t *str_le
     return result;
 }
 // true if error
-bool json_store_filename(const char *fn, struct jvalue* j) {
+bool jvalue_store_filename(const char *fn, struct jvalue* j) {
     FILE *f = fopen(fn, "r");
     if (!f) {
         return true;
@@ -970,7 +970,7 @@ void fprint_string(FILE *f, const char *str) {
         }
     }
 }
-bool fprint_value(FILE *f, struct jvalue *j) {
+bool jvalue_fprint(FILE *f, struct jvalue *j) {
     switch (j->type) {
         case JSTR:
             fprintf(f, "\"");
@@ -1005,7 +1005,7 @@ bool fprint_value(FILE *f, struct jvalue *j) {
                 fprintf(f, "\"");
                 fprint_string(f, pair->key);
                 fprintf(f, "\":");
-                fprint_value(f, pair->val);
+                jvalue_fprint(f, pair->val);
                 node = node->next;
                 if (node) {
                     exit_neg(fprintf(f, ", "), "fprint_object");
@@ -1017,7 +1017,7 @@ bool fprint_value(FILE *f, struct jvalue *j) {
             exit_neg(fprintf(f, "["), "fprint_object");
             struct array array = j->val.array;
             for (size_t i = 0; i < array.len; i++) {
-                fprint_value(f, array.arr[i]);
+                jvalue_fprint(f, array.arr[i]);
                 if (i != array.len - 1) {
                     exit_neg(fprintf(f, ", "), "fprint_object");
                 }

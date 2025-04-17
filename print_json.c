@@ -14,7 +14,7 @@ int main(int argc, char **argv) {
     char *buf = NULL;
     size_t len = 0;
     struct jerr err = {.iserr = false};
-    struct jvalue *j = load_filename(argv[1], &buf, &len, &err);
+    struct jvalue *j = json_load_filename(argv[1], &buf, &len, &err);
     if (!j) {
         if (err.errno_set) {
             jerr_print_str(&err, buf);
@@ -27,9 +27,9 @@ int main(int argc, char **argv) {
     }
     // print_value(j);
     printf("\n");
-    char *out_buf = sprint_value_normal(j);
+    char *out_buf = jvalue_sprint_alloc(j);
     printf("%s\n", out_buf);
-    free_object(j);
+    jvalue_free(j);
     free(buf);
     free(out_buf);
 

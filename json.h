@@ -133,7 +133,7 @@ struct jvalue *json_load_filename(const char *fn, char **str_buf, size_t *str_le
 
 // store file
 // true if error
-bool json_store_filename(const char *fn, struct jvalue* j);
+bool jvalue_store_filename(const char *fn, struct jvalue* j);
 
 // unload
 void jvalue_free(struct jvalue *j);
@@ -142,9 +142,9 @@ void jvalue_free(struct jvalue *j);
 void jvalue_print(struct jvalue *j);
 // true if error
 bool jvalue_fprint(FILE *f, struct jvalue *j);
-bool jvalue_serialize(const char *fn, struct jvalue *j);
+bool jvalue_store_filename(const char *fn, struct jvalue *j);
 // see json.c comments for details
 char *jvalue_sprint(struct jvalue *j, char *buf, size_t *offset, size_t *buf_len);
 char *json_sprint_string(const char *str, char *buf, size_t *offset, size_t *buf_len);
 // will return an allocated string
-char *json_sprint_value_alloc(struct jvalue *j);
+char *jvalue_sprint_alloc(struct jvalue *j);
