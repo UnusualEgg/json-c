@@ -306,7 +306,7 @@ void redraw(WINDOW *wm, MENU *m, struct jvalue *curr, int *item_i, ITEM ***items
     // debug
     // fprintf(stderr,"last:%p\n",(void*)items[item_i]);
     err_menu(set_menu_items(m, *items), "set_menu_items(new)");
-    // set_menu_format(m,LINES,COLS);
+    //set_menu_format(m,34,COLS-4);
 
     err_menu(post_menu(m), "post_menu");
     wrefresh(wm);
@@ -314,7 +314,7 @@ void redraw(WINDOW *wm, MENU *m, struct jvalue *curr, int *item_i, ITEM ***items
 // json explore and editor
 int main(int argc, char **argv) {
     if (argc != 2) {
-        fprintf(stderr, "%s takes 1 arg.", argv[0]);
+        fprintf(stderr, "%s takes 1 arg.\n", argv[0]);
         return EXIT_FAILURE;
     }
     // start curses mode
@@ -360,23 +360,27 @@ int main(int argc, char **argv) {
     size_t items_len = 10;
     ITEM **items = (ITEM **)calloc(items_len, sizeof(ITEM *));
     // menu
+    int lines = LINES;
+    int cols = COLS-1;//for some reason the right side is too long
+    wresize(stdscr,lines,cols);
+    int subw_lines = lines-2;
+    int subw_cols = cols-2;
+    set_menu_format(NULL, subw_lines,1);
     MENU *m = new_menu(items);
     exit_null(m, "new_menu");
-    int lines = LINES - 3;
-    int cols = COLS - 4;
-    err_menu(set_menu_mark(m, "> "), "set_menu_mark");
+    err_menu(set_menu_mark(m, ">"), "set_menu_mark");
     err_menu(set_menu_spacing(m, 1, 1, 1), "set_menu_mark");
     // subwindow
     keypad(stdscr, TRUE);
-    WINDOW *wm = newwin(lines, cols, 1, 1);
+    //WINDOW *wm = newwin(lines, cols, 0, 0);
+    WINDOW *wm = stdscr;
     keypad(wm, TRUE);
     cbreak();
     noecho();
     err_menu(set_menu_win(m, wm), "set_menu_win");
-    err_menu(set_menu_sub(m, derwin(wm, lines - 1, cols - 2, 1, 1)), "set_menu_sub");
+    err_menu(set_menu_sub(m, derwin(wm, subw_lines, subw_cols, 1, 1)), "set_menu_sub");
     // TODO figure out why only liek 15 items show up at a time
     // then it srolls
-    //set_menu_format(m, lines - 2, COLS);
 
     mvprintw(0, 0, "Json Explorer");
     box(wm, 0, 0);
@@ -397,6 +401,17 @@ int main(int argc, char **argv) {
     ITEM *curr_item;
     while ((c = getch()) != 'q') {
         switch (c) {
+            case 'p':{
+                int l,c,x,y;
+                getmaxyx(wm, y, x);
+                menu_format(m, &l, &c);
+                mvprintw(0, 0, "%d %d/%d %d (%d,%d)",l,c,LINES,COLS,y,x);
+                break;
+            }
+            case 'o':{
+                set_menu_format(m, 14, 1);
+                break;
+            }
             case KEY_DOWN:
             case 's':
                 menu_driver(m, REQ_DOWN_ITEM);

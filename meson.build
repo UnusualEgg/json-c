@@ -11,7 +11,7 @@ project(
 #libs
 hm_proj = subproject('hashmap', required: true)
 hm_lib = hm_proj.get_variable('hm_lib')
-json = shared_library('json', 'json.c', install: false, dependencies: hm_lib)
+json = shared_library('json', 'json.c', install: true, dependencies: hm_lib)
 json_lib = declare_dependency(
   link_with: [json],
   include_directories: [include_directories('.'), hm_proj.get_variable('incdir')],
@@ -43,7 +43,7 @@ menu = dependency('menu')
 executable(
   'explore',
   'explorer.c',
-  install: false,
+  install: true,
   dependencies: [hm_lib, json_lib, ncurses, menu],
 )
 executable('jprint', 'print_json.c', install: false, dependencies: [hm_lib, json_lib])
